@@ -4,11 +4,15 @@
  * GitHub Copilot CLI Session Manager
  */
 
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, shell } from 'electron';
 import * as path from 'path';
+import { spawn, exec } from 'child_process';
+import { promisify } from 'util';
 import { CLISessionMonitorService } from './services/CLISessionMonitorService';
 import { SessionFileWatcher, StateUpdate } from './services/SessionFileWatcher';
-import { CLISession, SessionMonitorState } from './models/types';
+import { CLISession, SessionMonitorState, WorktreeBranch } from './models/types';
+
+const execAsync = promisify(exec);
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -67,8 +71,19 @@ function setupIPC(): void {
     return monitorService.getSelectedRepositories();
   });
 
-  // Add repository
-  ipcMain.handle('add-repository', async (_event, repoPath: string) => {
+  // Add repository via folder picker
+  ipcMain.handle('add-repository', async (_event, repoPath?: string) => {
+    if (!repoPath) {
+      // Open folder picker
+      const result = await dialog.showOpenDialog(mainWindow!, {
+        properties: ['openDirectory'],
+        title: 'Select Repository Folder',
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return null;
+      }
+      repoPath = result.filePaths[0];
+    }
     return await monitorService.addRepository(repoPath);
   });
 
@@ -97,6 +112,164 @@ function setupIPC(): void {
   ipcMain.handle('get-session-state', (_event, sessionId: string) => {
     return fileWatcher.getState(sessionId);
   });
+
+  // === NEW SESSION FEATURES ===
+
+  // Open terminal with new Copilot session
+  ipcMain.handle('open-terminal', async (_event, workingDir: string, branchName?: string) => {
+    try {
+      // Find gh executable
+      const ghPath = await findGHExecutable();
+      if (!ghPath) {
+        throw new Error('GitHub CLI (gh) not found. Please install it first.');
+      }
+
+      // Build command - checkout branch if specified, then start gh copilot
+      let command: string;
+      if (process.platform === 'win32') {
+        // Windows: use start cmd
+        if (branchName) {
+          command = `start cmd /k "cd /d "${workingDir}" && git checkout "${branchName}" && "${ghPath}" copilot"`;
+        } else {
+          command = `start cmd /k "cd /d "${workingDir}" && "${ghPath}" copilot"`;
+        }
+      } else {
+        // macOS/Linux: create temp script and open Terminal
+        const scriptContent = branchName
+          ? `cd "${workingDir}" && git checkout "${branchName}" && "${ghPath}" copilot`
+          : `cd "${workingDir}" && "${ghPath}" copilot`;
+        
+        const tempScript = path.join(app.getPath('temp'), `ghcp_${Date.now()}.command`);
+        const fs = require('fs');
+        fs.writeFileSync(tempScript, `#!/bin/bash\n${scriptContent}`, { mode: 0o755 });
+        await shell.openPath(tempScript);
+        setTimeout(() => fs.unlinkSync(tempScript), 5000);
+        return { success: true };
+      }
+
+      await execAsync(command);
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to open terminal:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  });
+
+  // Resume existing session in terminal
+  ipcMain.handle('resume-session-terminal', async (_event, sessionId: string, workingDir: string) => {
+    try {
+      const ghPath = await findGHExecutable();
+      if (!ghPath) {
+        throw new Error('GitHub CLI (gh) not found.');
+      }
+
+      let command: string;
+      if (process.platform === 'win32') {
+        command = `start cmd /k "cd /d "${workingDir}" && "${ghPath}" copilot -r "${sessionId}""`;
+      } else {
+        const scriptContent = `cd "${workingDir}" && "${ghPath}" copilot -r "${sessionId}"`;
+        const tempScript = path.join(app.getPath('temp'), `ghcp_resume_${Date.now()}.command`);
+        const fs = require('fs');
+        fs.writeFileSync(tempScript, `#!/bin/bash\n${scriptContent}`, { mode: 0o755 });
+        await shell.openPath(tempScript);
+        setTimeout(() => fs.unlinkSync(tempScript), 5000);
+        return { success: true };
+      }
+
+      await execAsync(command);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  });
+
+  // Create git worktree
+  ipcMain.handle('create-worktree', async (_event, repoPath: string, branchName: string, baseBranch: string) => {
+    try {
+      // Determine worktree path (sibling to repo with branch suffix)
+      const repoName = path.basename(repoPath);
+      const parentDir = path.dirname(repoPath);
+      const safeBranchName = branchName.replace(/\//g, '-');
+      const worktreePath = path.join(parentDir, `${repoName}-${safeBranchName}`);
+
+      // Create worktree with new branch
+      const cmd = `git worktree add -b "${branchName}" "${worktreePath}" "${baseBranch}"`;
+      await execAsync(cmd, { cwd: repoPath });
+
+      // Refresh to pick up new worktree
+      await monitorService.refreshSessions();
+
+      return { success: true, worktreePath };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  });
+
+  // Get git branches for a repo
+  ipcMain.handle('get-branches', async (_event, repoPath: string) => {
+    try {
+      const { stdout } = await execAsync('git branch -a', { cwd: repoPath });
+      const branches = stdout
+        .split('\n')
+        .map(b => b.trim().replace(/^\* /, ''))
+        .filter(b => b && !b.startsWith('remotes/'));
+      return branches;
+    } catch {
+      return ['main', 'master'];
+    }
+  });
+
+  // Delete worktree
+  ipcMain.handle('delete-worktree', async (_event, repoPath: string, worktreePath: string) => {
+    try {
+      await execAsync(`git worktree remove "${worktreePath}" --force`, { cwd: repoPath });
+      await monitorService.refreshSessions();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  });
+
+  // Open folder in system file explorer
+  ipcMain.handle('open-folder', (_event, folderPath: string) => {
+    shell.openPath(folderPath);
+  });
+}
+
+// Find gh CLI executable
+async function findGHExecutable(): Promise<string | null> {
+  const fs = require('fs');
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
+
+  // Common paths
+  const searchPaths = process.platform === 'win32'
+    ? [
+        path.join(home, 'AppData', 'Local', 'Programs', 'GitHub CLI', 'gh.exe'),
+        'C:\\Program Files\\GitHub CLI\\gh.exe',
+        'C:\\Program Files (x86)\\GitHub CLI\\gh.exe',
+      ]
+    : [
+        '/usr/local/bin/gh',
+        '/opt/homebrew/bin/gh',
+        '/usr/bin/gh',
+        path.join(home, '.local', 'bin', 'gh'),
+      ];
+
+  for (const p of searchPaths) {
+    if (fs.existsSync(p)) return p;
+  }
+
+  // Try 'where' (Windows) or 'which' (Unix)
+  try {
+    const cmd = process.platform === 'win32' ? 'where gh' : 'which gh';
+    const { stdout } = await execAsync(cmd);
+    const found = stdout.trim().split('\n')[0];
+    if (found && fs.existsSync(found)) return found;
+  } catch {
+    // Not found
+  }
+
+  return null;
 }
 
 app.whenReady().then(() => {

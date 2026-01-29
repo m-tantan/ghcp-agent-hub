@@ -6,482 +6,236 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
   <title>GHCP Agent Hub</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-      background: #1a1a2e;
-      color: #eee;
-      min-height: 100vh;
-    }
-
-    .app {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-
-    header {
-      background: #16213e;
-      padding: 16px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #0f3460;
-    }
-
-    header h1 {
-      font-size: 20px;
-      font-weight: 600;
-      color: #e94560;
-    }
-
-    header .subtitle {
-      font-size: 12px;
-      color: #888;
-      margin-top: 4px;
-    }
-
-    .controls {
-      display: flex;
-      gap: 12px;
-    }
-
-    button {
-      background: #0f3460;
-      color: #eee;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background 0.2s;
-    }
-
-    button:hover {
-      background: #e94560;
-    }
-
-    main {
-      flex: 1;
-      overflow: auto;
-      padding: 24px;
-    }
-
-    .stats-bar {
-      display: flex;
-      gap: 24px;
-      margin-bottom: 24px;
-      padding: 16px;
-      background: #16213e;
-      border-radius: 8px;
-    }
-
-    .stat {
-      text-align: center;
-    }
-
-    .stat-value {
-      font-size: 28px;
-      font-weight: bold;
-      color: #e94560;
-    }
-
-    .stat-label {
-      font-size: 12px;
-      color: #888;
-      margin-top: 4px;
-    }
-
-    .sessions-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-      gap: 16px;
-    }
-
-    .session-card {
-      background: #16213e;
-      border-radius: 8px;
-      padding: 16px;
-      border: 1px solid #0f3460;
-      transition: border-color 0.2s;
-    }
-
-    .session-card:hover {
-      border-color: #e94560;
-    }
-
-    .session-card.active {
-      border-color: #4ade80;
-    }
-
-    .session-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 12px;
-    }
-
-    .session-id {
-      font-family: monospace;
-      font-size: 12px;
-      color: #888;
-    }
-
-    .session-status {
-      font-size: 11px;
-      padding: 4px 8px;
-      border-radius: 12px;
-      font-weight: 500;
-    }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+    .app { display: flex; height: 100vh; }
+    .sidebar { width: 300px; background: #16213e; border-right: 1px solid #0f3460; display: flex; flex-direction: column; }
+    .sidebar-header { padding: 16px; border-bottom: 1px solid #0f3460; }
+    .sidebar-header h1 { font-size: 16px; color: #e94560; }
+    .sidebar-actions { padding: 12px; display: flex; gap: 8px; border-bottom: 1px solid #0f3460; }
+    .sidebar-actions button { flex: 1; padding: 8px; font-size: 12px; }
+    .repo-list { flex: 1; overflow-y: auto; padding: 8px; }
+    .repo-item { background: #1a1a2e; border-radius: 6px; margin-bottom: 8px; }
+    .repo-header { display: flex; align-items: center; padding: 10px 12px; cursor: pointer; gap: 8px; }
+    .repo-header:hover { background: #0f3460; }
+    .repo-header .chevron { font-size: 10px; color: #888; transition: transform 0.2s; }
+    .repo-header.expanded .chevron { transform: rotate(90deg); }
+    .repo-name { flex: 1; font-weight: 500; font-size: 13px; }
+    .repo-actions { display: flex; gap: 4px; }
+    .repo-actions button { padding: 4px 6px; font-size: 11px; background: transparent; border: 1px solid #0f3460; }
+    .repo-actions button:hover { background: #0f3460; }
+    .worktree-list { padding: 0 8px 8px 8px; }
+    .worktree-item { padding: 8px 12px; margin-top: 4px; background: #16213e; border-radius: 4px; font-size: 12px; }
+    .worktree-header { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .worktree-header:hover { color: #e94560; }
+    .worktree-branch { color: #4ade80; font-family: monospace; }
+    .worktree-path { color: #888; font-size: 10px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .worktree-actions { display: flex; gap: 4px; margin-top: 8px; }
+    .worktree-actions button { padding: 4px 8px; font-size: 11px; }
+    .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    header { background: #16213e; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #0f3460; }
+    .stats-bar { display: flex; gap: 24px; }
+    .stat { text-align: center; }
+    .stat-value { font-size: 24px; font-weight: bold; color: #e94560; }
+    .stat-label { font-size: 11px; color: #888; }
+    button { background: #0f3460; color: #eee; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+    button:hover { background: #e94560; }
+    button.primary { background: #e94560; }
+    button.primary:hover { background: #ff6b8a; }
+    main { flex: 1; overflow: auto; padding: 24px; }
+    .sessions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+    .session-card { background: #16213e; border-radius: 8px; padding: 16px; border: 1px solid #0f3460; transition: border-color 0.2s; }
+    .session-card:hover { border-color: #e94560; }
+    .session-card.active { border-color: #4ade80; }
+    .session-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .session-id { font-family: monospace; font-size: 11px; color: #888; }
+    .session-status { font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: 500; }
     .status-idle { background: #374151; color: #9ca3af; }
     .status-thinking { background: #1e40af; color: #93c5fd; }
     .status-executing { background: #7c3aed; color: #c4b5fd; }
     .status-awaiting { background: #b45309; color: #fcd34d; }
     .status-waiting { background: #047857; color: #6ee7b7; }
-
-    .session-summary {
-      font-size: 14px;
-      color: #ccc;
-      margin-bottom: 12px;
-      line-height: 1.4;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    .session-meta {
-      display: flex;
-      gap: 16px;
-      font-size: 12px;
-      color: #888;
-    }
-
-    .session-meta span {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .branch-badge {
-      background: #0f3460;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-family: monospace;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 60px 24px;
-      color: #888;
-    }
-
-    .empty-state h2 {
-      font-size: 24px;
-      margin-bottom: 12px;
-      color: #ccc;
-    }
-
-    .loading {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 200px;
-      color: #888;
-    }
-
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid #0f3460;
-      border-top-color: #e94560;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    /* Activity list for selected session */
-    .activity-panel {
-      position: fixed;
-      right: 0;
-      top: 0;
-      width: 400px;
-      height: 100vh;
-      background: #16213e;
-      border-left: 1px solid #0f3460;
-      padding: 24px;
-      transform: translateX(100%);
-      transition: transform 0.3s;
-      overflow-y: auto;
-    }
-
-    .activity-panel.open {
-      transform: translateX(0);
-    }
-
-    .activity-panel h2 {
-      margin-bottom: 16px;
-    }
-
-    .activity-item {
-      padding: 12px;
-      background: #1a1a2e;
-      border-radius: 6px;
-      margin-bottom: 8px;
-      font-size: 13px;
-    }
-
-    .activity-type {
-      font-size: 11px;
-      color: #e94560;
-      margin-bottom: 4px;
-    }
-
-    .activity-time {
-      font-size: 10px;
-      color: #666;
-      margin-top: 4px;
-    }
+    .session-summary { font-size: 13px; color: #ccc; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .session-meta { display: flex; gap: 12px; font-size: 11px; color: #888; flex-wrap: wrap; }
+    .branch-badge { background: #0f3460; padding: 2px 6px; border-radius: 4px; font-family: monospace; color: #4ade80; }
+    .session-actions { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #0f3460; }
+    .session-actions button { flex: 1; padding: 6px 12px; font-size: 11px; }
+    .empty-state { text-align: center; padding: 60px 24px; color: #888; }
+    .empty-state h2 { font-size: 20px; margin-bottom: 12px; color: #ccc; }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 100; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: #16213e; border-radius: 12px; padding: 24px; width: 400px; max-width: 90vw; }
+    .modal h2 { margin-bottom: 16px; color: #e94560; }
+    .modal label { display: block; margin-bottom: 8px; font-size: 13px; color: #ccc; }
+    .modal input, .modal select { width: 100%; padding: 10px 12px; margin-bottom: 16px; background: #1a1a2e; border: 1px solid #0f3460; border-radius: 6px; color: #eee; font-size: 14px; }
+    .modal input:focus, .modal select:focus { outline: none; border-color: #e94560; }
+    .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+    .activity-panel { position: fixed; right: 0; top: 0; width: 400px; height: 100vh; background: #16213e; border-left: 1px solid #0f3460; padding: 24px; transform: translateX(100%); transition: transform 0.3s; overflow-y: auto; z-index: 50; }
+    .activity-panel.open { transform: translateX(0); }
+    .activity-panel h2 { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+    .activity-item { padding: 10px 12px; background: #1a1a2e; border-radius: 6px; margin-bottom: 8px; font-size: 12px; }
+    .activity-type { font-size: 10px; color: #e94560; margin-bottom: 4px; text-transform: uppercase; }
+    .activity-time { font-size: 10px; color: #666; margin-top: 4px; }
+    .close-btn { background: none; border: none; color: #888; cursor: pointer; padding: 4px; }
+    .close-btn:hover { color: #e94560; background: none; }
+    .loading { display: flex; justify-content: center; padding: 40px; }
+    .spinner { width: 32px; height: 32px; border: 3px solid #0f3460; border-top-color: #e94560; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #searchInput { padding: 8px 12px; background: #1a1a2e; border: 1px solid #0f3460; border-radius: 6px; color: #eee; width: 200px; }
   </style>
 </head>
 <body>
   <div class="app">
-    <header>
-      <div>
-        <h1>🤖 GHCP Agent Hub</h1>
-        <div class="subtitle">GitHub Copilot CLI Session Manager</div>
+    <div class="sidebar">
+      <div class="sidebar-header"><h1>🤖 GHCP Agent Hub</h1></div>
+      <div class="sidebar-actions">
+        <button id="addRepoBtn">+ Add Repo</button>
+        <button id="refreshBtn">🔄</button>
       </div>
-      <div class="controls">
-        <button id="refreshBtn">🔄 Refresh</button>
-      </div>
-    </header>
-
-    <main>
-      <div class="stats-bar">
-        <div class="stat">
-          <div class="stat-value" id="totalSessions">-</div>
-          <div class="stat-label">Total Sessions</div>
+      <div class="repo-list" id="repoList"></div>
+    </div>
+    <div class="main-content">
+      <header>
+        <div class="stats-bar">
+          <div class="stat"><div class="stat-value" id="totalSessions">-</div><div class="stat-label">Sessions</div></div>
+          <div class="stat"><div class="stat-value" id="activeSessions">-</div><div class="stat-label">Active</div></div>
+          <div class="stat"><div class="stat-value" id="repoCount">-</div><div class="stat-label">Repos</div></div>
         </div>
-        <div class="stat">
-          <div class="stat-value" id="activeSessions">-</div>
-          <div class="stat-label">Active</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value" id="awaitingSessions">-</div>
-          <div class="stat-label">Awaiting Approval</div>
-        </div>
-      </div>
-
-      <div id="content">
-        <div class="loading">
-          <div class="spinner"></div>
-        </div>
-      </div>
-    </main>
-
+        <input type="text" id="searchInput" placeholder="Search sessions...">
+      </header>
+      <main id="content"><div class="loading"><div class="spinner"></div></div></main>
+    </div>
     <div class="activity-panel" id="activityPanel">
-      <h2>Session Activity</h2>
+      <h2>Session Activity <button class="close-btn" id="closeActivityBtn">✕</button></h2>
       <div id="activityList"></div>
     </div>
+    <div class="modal-overlay" id="worktreeModal">
+      <div class="modal">
+        <h2>Create Worktree</h2>
+        <label>Branch Name</label>
+        <input type="text" id="newBranchName" placeholder="feature/my-feature">
+        <label>Base Branch</label>
+        <select id="baseBranch"><option value="main">main</option></select>
+        <div class="modal-actions">
+          <button id="cancelWorktreeBtn">Cancel</button>
+          <button class="primary" id="createWorktreeBtn">Create</button>
+        </div>
+      </div>
+    </div>
   </div>
-
   <script>
-    // Type definitions for the exposed API
     const api = window.electronAPI;
+    let sessions = [], repositories = [], selectedSessionId = null, currentRepoForWorktree = null, searchQuery = '';
 
-    let sessions = [];
-    let selectedSessionId = null;
-
-    // Initialize
     async function init() {
-      await loadSessions();
-
-      // Set up event listeners
-      api.onSessionsChanged((newSessions) => {
-        sessions = newSessions;
-        render();
-      });
-
-      api.onSessionStateUpdate((update) => {
-        console.log('Session state update:', update);
-        // Update UI for specific session
-        const card = document.querySelector(`[data-session-id="${update.sessionId}"]`);
-        if (card) {
-          updateSessionCard(card, update.state);
-        }
-      });
-
-      document.getElementById('refreshBtn').addEventListener('click', loadSessions);
+      await loadData();
+      api.onSessionsChanged(s => { sessions = s; render(); });
+      api.onRepositoriesChanged(r => { repositories = r; renderSidebar(); });
+      api.onSessionStateUpdate(updateSessionState);
+      document.getElementById('refreshBtn').addEventListener('click', loadData);
+      document.getElementById('addRepoBtn').addEventListener('click', addRepository);
+      document.getElementById('closeActivityBtn').addEventListener('click', closeActivityPanel);
+      document.getElementById('cancelWorktreeBtn').addEventListener('click', () => document.getElementById('worktreeModal').classList.remove('show'));
+      document.getElementById('createWorktreeBtn').addEventListener('click', createWorktree);
+      document.getElementById('searchInput').addEventListener('input', e => { searchQuery = e.target.value.toLowerCase(); renderSessions(); });
     }
 
-    async function loadSessions() {
-      document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-      try {
-        sessions = await api.getSessions();
-        render();
-      } catch (err) {
-        console.error('Failed to load sessions:', err);
-        document.getElementById('content').innerHTML = '<div class="empty-state"><h2>Error loading sessions</h2><p>' + err.message + '</p></div>';
-      }
+    async function loadData() {
+      [sessions, repositories] = await Promise.all([api.getSessions(), api.getRepositories()]);
+      render();
     }
 
-    function render() {
-      // Update stats
+    function render() { renderSidebar(); renderSessions(); updateStats(); }
+    function updateStats() {
       document.getElementById('totalSessions').textContent = sessions.length;
       document.getElementById('activeSessions').textContent = sessions.filter(s => s.isActive).length;
-      document.getElementById('awaitingSessions').textContent = '0'; // Updated via state updates
+      document.getElementById('repoCount').textContent = repositories.length;
+    }
 
-      // Render sessions
-      const content = document.getElementById('content');
-
-      if (sessions.length === 0) {
-        content.innerHTML = `
-          <div class="empty-state">
-            <h2>No Sessions Found</h2>
-            <p>Start a GitHub Copilot CLI session to see it here.</p>
-            <p style="margin-top: 16px; font-size: 12px; color: #666;">
-              Sessions are stored in ~/.copilot/session-state/
-            </p>
+    function renderSidebar() {
+      const el = document.getElementById('repoList');
+      if (!repositories.length) { el.innerHTML = '<div style="text-align:center;padding:24px;color:#666"><p>No repos</p><p style="font-size:11px;margin-top:8px">Click "Add Repo"</p></div>'; return; }
+      el.innerHTML = repositories.map(r => `
+        <div class="repo-item">
+          <div class="repo-header ${r.isExpanded?'expanded':''}" onclick="toggleRepo('${esc(r.path)}')">
+            <span class="chevron">▶</span><span class="repo-name">📁 ${esc(r.path.split(/[/\\]/).pop())}</span>
+            <div class="repo-actions" onclick="event.stopPropagation()">
+              <button onclick="showCreateWorktree('${esc(r.path)}')" title="New Worktree">🌿</button>
+              <button onclick="removeRepo('${esc(r.path)}')" title="Remove">✕</button>
+            </div>
           </div>
-        `;
-        return;
-      }
-
-      content.innerHTML = `
-        <div class="sessions-grid">
-          ${sessions.map(session => renderSessionCard(session)).join('')}
-        </div>
-      `;
-
-      // Add click handlers
-      document.querySelectorAll('.session-card').forEach(card => {
-        card.addEventListener('click', () => {
-          const sessionId = card.dataset.sessionId;
-          selectSession(sessionId);
-        });
-      });
+          ${r.isExpanded ? `<div class="worktree-list">${r.worktrees.map(w => `
+            <div class="worktree-item">
+              <div class="worktree-header"><span>${w.isWorktree?'🌿':'📂'}</span><span class="worktree-branch">${esc(w.name)}</span><span style="color:#888;font-size:10px">(${w.sessions.length})</span></div>
+              <div class="worktree-path">${esc(w.path)}</div>
+              <div class="worktree-actions">
+                <button onclick="openTerm('${esc(w.path)}')">▶ New</button>
+                <button onclick="api.openFolder('${esc(w.path)}')">📂</button>
+                ${w.isWorktree?`<button onclick="delWorktree('${esc(r.path)}','${esc(w.path)}')" style="color:#e94560">🗑</button>`:''}
+              </div>
+            </div>`).join('')}</div>` : ''}
+        </div>`).join('');
     }
 
-    function renderSessionCard(session) {
-      const statusClass = session.isActive ? 'active' : '';
-      const timeAgo = formatTimeAgo(new Date(session.lastActivityAt));
-
-      return `
-        <div class="session-card ${statusClass}" data-session-id="${session.id}">
-          <div class="session-header">
-            <span class="session-id">${session.id.substring(0, 8)}...</span>
-            <span class="session-status ${session.isActive ? 'status-executing' : 'status-idle'}">
-              ${session.isActive ? 'Active' : 'Idle'}
-            </span>
-          </div>
-          <div class="session-summary">
-            ${session.summary || session.firstMessage || 'No summary'}
-          </div>
-          <div class="session-meta">
-            <span><span class="branch-badge">${session.branchName}</span></span>
-            <span>📝 ${session.messageCount} messages</span>
-            <span>⏱️ ${timeAgo}</span>
-          </div>
-        </div>
-      `;
+    function renderSessions() {
+      const el = document.getElementById('content');
+      let f = searchQuery ? sessions.filter(s => ((s.summary||'')+(s.firstMessage||'')+s.branchName+s.id).toLowerCase().includes(searchQuery)) : sessions;
+      if (!f.length) { el.innerHTML = `<div class="empty-state"><h2>${searchQuery?'No matches':'No Sessions'}</h2></div>`; return; }
+      el.innerHTML = `<div class="sessions-grid">${f.map(s => `
+        <div class="session-card ${s.isActive?'active':''}" data-session-id="${s.id}">
+          <div class="session-header"><span class="session-id">${s.id.slice(0,8)}...</span><span class="session-status ${s.isActive?'status-executing':'status-idle'}">${s.isActive?'Active':'Idle'}</span></div>
+          <div class="session-summary">${esc(s.summary||s.firstMessage||'No summary')}</div>
+          <div class="session-meta"><span class="branch-badge">${esc(s.branchName)}</span><span>📝 ${s.messageCount}</span><span>⏱️ ${timeAgo(new Date(s.lastActivityAt))}</span></div>
+          <div class="session-actions"><button onclick="viewActivity('${s.id}')">📊 Activity</button><button onclick="resumeSess('${s.id}','${esc(s.projectPath)}')">▶ Resume</button></div>
+        </div>`).join('')}</div>`;
     }
 
-    function updateSessionCard(card, state) {
-      const statusEl = card.querySelector('.session-status');
-      if (statusEl && state.status) {
-        const statusType = state.status.type;
-        let statusText = statusType;
-        let statusClass = 'status-idle';
-
-        switch (statusType) {
-          case 'thinking':
-            statusText = 'Thinking...';
-            statusClass = 'status-thinking';
-            break;
-          case 'executingTool':
-            statusText = `Executing: ${state.status.name}`;
-            statusClass = 'status-executing';
-            break;
-          case 'awaitingApproval':
-            statusText = `Awaiting: ${state.status.tool}`;
-            statusClass = 'status-awaiting';
-            break;
-          case 'waitingForUser':
-            statusText = 'Waiting for User';
-            statusClass = 'status-waiting';
-            break;
-          default:
-            statusText = 'Idle';
-        }
-
-        statusEl.textContent = statusText;
-        statusEl.className = `session-status ${statusClass}`;
-      }
+    function updateSessionState(u) {
+      const card = document.querySelector(`[data-session-id="${u.sessionId}"]`);
+      if (!card || !u.state?.status) return;
+      const st = card.querySelector('.session-status'), {type} = u.state.status;
+      let txt = type, cls = 'status-idle';
+      if (type==='thinking') { txt='Thinking...'; cls='status-thinking'; }
+      else if (type==='executingTool') { txt=`Running: ${u.state.status.name}`; cls='status-executing'; }
+      else if (type==='awaitingApproval') { txt=`Awaiting: ${u.state.status.tool}`; cls='status-awaiting'; }
+      else if (type==='waitingForUser') { txt='Waiting'; cls='status-waiting'; }
+      st.textContent = txt; st.className = `session-status ${cls}`;
+      if (selectedSessionId === u.sessionId && u.state.recentActivities) renderActivities(u.state.recentActivities);
     }
 
-    async function selectSession(sessionId) {
-      selectedSessionId = sessionId;
-
-      // Start monitoring
-      await api.startMonitoring(sessionId);
-
-      // Get current state
-      const state = await api.getSessionState(sessionId);
-
-      // Show activity panel
-      const panel = document.getElementById('activityPanel');
-      panel.classList.add('open');
-
-      if (state && state.recentActivities) {
-        renderActivities(state.recentActivities);
-      }
+    async function addRepository() { await api.addRepository(); await loadData(); }
+    async function removeRepo(p) { if (confirm(`Remove?\n${p}`)) { await api.removeRepository(p); await loadData(); } }
+    function toggleRepo(p) { const r = repositories.find(x => x.path === p); if (r) { r.isExpanded = !r.isExpanded; renderSidebar(); } }
+    async function openTerm(dir, branch) { const r = await api.openTerminal(dir, branch); if (!r.success) alert('Error: ' + r.error); }
+    async function resumeSess(id, dir) { const r = await api.resumeSessionTerminal(id, dir); if (!r.success) alert('Error: ' + r.error); }
+    async function showCreateWorktree(p) {
+      currentRepoForWorktree = p;
+      const branches = await api.getBranches(p);
+      document.getElementById('baseBranch').innerHTML = branches.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
+      document.getElementById('newBranchName').value = '';
+      document.getElementById('worktreeModal').classList.add('show');
     }
-
-    function renderActivities(activities) {
-      const list = document.getElementById('activityList');
-      list.innerHTML = activities.slice(-20).reverse().map(activity => `
-        <div class="activity-item">
-          <div class="activity-type">${activity.activityType.type}</div>
-          <div>${activity.description}</div>
-          <div class="activity-time">${new Date(activity.timestamp).toLocaleTimeString()}</div>
-        </div>
-      `).join('');
+    async function createWorktree() {
+      const name = document.getElementById('newBranchName').value.trim(), base = document.getElementById('baseBranch').value;
+      if (!name) { alert('Enter branch name'); return; }
+      const r = await api.createWorktree(currentRepoForWorktree, name, base);
+      if (r.success) { document.getElementById('worktreeModal').classList.remove('show'); await loadData(); } else alert('Error: ' + r.error);
     }
-
-    function formatTimeAgo(date) {
-      const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-
-      if (seconds < 60) return 'just now';
-      if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-      if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-      return `${Math.floor(seconds / 86400)}d ago`;
+    async function delWorktree(repo, wt) { if (confirm(`Delete worktree?\n${wt}`)) { await api.deleteWorktree(repo, wt); await loadData(); } }
+    async function viewActivity(id) {
+      selectedSessionId = id; await api.startMonitoring(id);
+      const s = await api.getSessionState(id);
+      if (s?.recentActivities) renderActivities(s.recentActivities);
+      document.getElementById('activityPanel').classList.add('open');
     }
-
-    // Close activity panel when clicking outside
-    document.addEventListener('click', (e) => {
-      const panel = document.getElementById('activityPanel');
-      if (panel.classList.contains('open') && 
-          !panel.contains(e.target) && 
-          !e.target.closest('.session-card')) {
-        panel.classList.remove('open');
-        if (selectedSessionId) {
-          api.stopMonitoring(selectedSessionId);
-          selectedSessionId = null;
-        }
-      }
-    });
-
-    // Initialize on load
+    function renderActivities(a) {
+      document.getElementById('activityList').innerHTML = a.slice(-25).reverse().map(x => `
+        <div class="activity-item"><div class="activity-type">${x.activityType.type}${x.activityType.name?': '+esc(x.activityType.name):''}</div>
+        <div>${esc(x.description)}</div><div class="activity-time">${new Date(x.timestamp).toLocaleTimeString()}</div></div>`).join('');
+    }
+    function closeActivityPanel() { document.getElementById('activityPanel').classList.remove('open'); if (selectedSessionId) { api.stopMonitoring(selectedSessionId); selectedSessionId = null; } }
+    function timeAgo(d) { const s = Math.floor((Date.now()-d.getTime())/1000); return s<60?'now':s<3600?`${Math.floor(s/60)}m`:s<86400?`${Math.floor(s/3600)}h`:`${Math.floor(s/86400)}d`; }
+    function esc(s) { return s ? s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : ''; }
     init();
   </script>
 </body>
