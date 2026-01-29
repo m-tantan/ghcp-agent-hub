@@ -1,0 +1,26 @@
+{
+  "name": "ghcp-agent-hub",
+  "version": "1.0.0",
+  "main": "dist/main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "electron .",
+    "build": "tsc",
+    "dev": "tsc && electron .",
+    "package": "electron-builder"
+  },
+  "keywords": [],
+  "author": "GHCP-Agent-Hub",
+  "license": "MIT",
+  "description": "GitHub Copilot CLI Session Manager",
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "electron": "^40.1.0",
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "electron-builder": "^26.4.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>GHCP Agent Hub</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    header {
+      background: #16213e;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #0f3460;
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #e94560;
+    }
+
+    header .subtitle {
+      font-size: 12px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+    }
+
+    button {
+      background: #0f3460;
+      color: #eee;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #e94560;
+    }
+
+    main {
+      flex: 1;
+      overflow: auto;
+      padding: 24px;
+    }
+
+    .stats-bar {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 24px;
+      padding: 16px;
+      background: #16213e;
+      border-radius: 8px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: bold;
+      color: #e94560;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    .sessions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 16px;
+    }
+
+    .session-card {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid #0f3460;
+      transition: border-color 0.2s;
+    }
+
+    .session-card:hover {
+      border-color: #e94560;
+    }
+
+    .session-card.active {
+      border-color: #4ade80;
+    }
+
+    .session-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .session-id {
+      font-family: monospace;
+      font-size: 12px;
+      color: #888;
+    }
+
+    .session-status {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+
+    .status-idle { background: #374151; color: #9ca3af; }
+    .status-thinking { background: #1e40af; color: #93c5fd; }
+    .status-executing { background: #7c3aed; color: #c4b5fd; }
+    .status-awaiting { background: #b45309; color: #fcd34d; }
+    .status-waiting { background: #047857; color: #6ee7b7; }
+
+    .session-summary {
+      font-size: 14px;
+      color: #ccc;
+      margin-bottom: 12px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .session-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      color: #888;
+    }
+
+    .session-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .branch-badge {
+      background: #0f3460;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 24px;
+      color: #888;
+    }
+
+    .empty-state h2 {
+      font-size: 24px;
+      margin-bottom: 12px;
+      color: #ccc;
+    }
+
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 200px;
+      color: #888;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #0f3460;
+      border-top-color: #e94560;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Activity list for selected session */
+    .activity-panel {
+      position: fixed;
+      right: 0;
+      top: 0;
+      width: 400px;
+      height: 100vh;
+      background: #16213e;
+      border-left: 1px solid #0f3460;
+      padding: 24px;
+      transform: translateX(100%);
+      transition: transform 0.3s;
+      overflow-y: auto;
+    }
+
+    .activity-panel.open {
+      transform: translateX(0);
+    }
+
+    .activity-panel h2 {
+      margin-bottom: 16px;
+    }
+
+    .activity-item {
+      padding: 12px;
+      background: #1a1a2e;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .activity-type {
+      font-size: 11px;
+      color: #e94560;
+      margin-bottom: 4px;
+    }
+
+    .activity-time {
+      font-size: 10px;
+      color: #666;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>🤖 GHCP Agent Hub</h1>
+        <div class="subtitle">GitHub Copilot CLI Session Manager</div>
+      </div>
+      <div class="controls">
+        <button id="refreshBtn">🔄 Refresh</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="stats-bar">
+        <div class="stat">
+          <div class="stat-value" id="totalSessions">-</div>
+          <div class="stat-label">Total Sessions</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="activeSessions">-</div>
+          <div class="stat-label">Active</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="awaitingSessions">-</div>
+          <div class="stat-label">Awaiting Approval</div>
+        </div>
+      </div>
+
+      <div id="content">
+        <div class="loading">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </main>
+
+    <div class="activity-panel" id="activityPanel">
+      <h2>Session Activity</h2>
+      <div id="activityList"></div>
+    </div>
+  </div>
+
+  <script>
+    // Type definitions for the exposed API
+    const api = window.electronAPI;
+
+    let sessions = [];
+    let selectedSessionId = null;
+
+    // Initialize
+    async function init() {
+      await loadSessions();
+
+      // Set up event listeners
+      api.onSessionsChanged((newSessions) => {
+        sessions = newSessions;
+        render();
+      });
+
+      api.onSessionStateUpdate((update) => {
+        console.log('Session state update:', update);
+        // Update UI for specific session
+        const card = document.querySelector(`[data-session-id="${update.sessionId}"]`);
+        if (card) {
+          updateSessionCard(card, update.state);
+        }
+      });
+
+      document.getElementById('refreshBtn').addEventListener('click', loadSessions);
+    }
+
+    async function loadSessions() {
+      document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+      try {
+        sessions = await api.getSessions();
+        render();
+      } catch (err) {
+        console.error('Failed to load sessions:', err);
+        document.getElementById('content').innerHTML = '<div class="empty-state"><h2>Error loading sessions</h2><p>' + err.message + '</p></div>';
+      }
+    }
+
+    function render() {
+      // Update stats
+      document.getElementById('totalSessions').textContent = sessions.length;
+      document.getElementById('activeSessions').textContent = sessions.filter(s => s.isActive).length;
+      document.getElementById('awaitingSessions').textContent = '0'; // Updated via state updates
+
+      // Render sessions
+      const content = document.getElementById('content');
+
+      if (sessions.length === 0) {
+        content.innerHTML = `
+          <div class="empty-state">
+            <h2>No Sessions Found</h2>
+            <p>Start a GitHub Copilot CLI session to see it here.</p>
+            <p style="margin-top: 16px; font-size: 12px; color: #666;">
+              Sessions are stored in ~/.copilot/session-state/
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      content.innerHTML = `
+        <div class="sessions-grid">
+          ${sessions.map(session => renderSessionCard(session)).join('')}
+        </div>
+      `;
+
+      // Add click handlers
+      document.querySelectorAll('.session-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const sessionId = card.dataset.sessionId;
+          selectSession(sessionId);
+        });
+      });
+    }
+
+    function renderSessionCard(session) {
+      const statusClass = session.isActive ? 'active' : '';
+      const timeAgo = formatTimeAgo(new Date(session.lastActivityAt));
+
+      return `
+        <div class="session-card ${statusClass}" data-session-id="${session.id}">
+          <div class="session-header">
+            <span class="session-id">${session.id.substring(0, 8)}...</span>
+            <span class="session-status ${session.isActive ? 'status-executing' : 'status-idle'}">
+              ${session.isActive ? 'Active' : 'Idle'}
+            </span>
+          </div>
+          <div class="session-summary">
+            ${session.summary || session.firstMessage || 'No summary'}
+          </div>
+          <div class="session-meta">
+            <span><span class="branch-badge">${session.branchName}</span></span>
+            <span>📝 ${session.messageCount} messages</span>
+            <span>⏱️ ${timeAgo}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function updateSessionCard(card, state) {
+      const statusEl = card.querySelector('.session-status');
+      if (statusEl && state.status) {
+        const statusType = state.status.type;
+        let statusText = statusType;
+        let statusClass = 'status-idle';
+
+        switch (statusType) {
+          case 'thinking':
+            statusText = 'Thinking...';
+            statusClass = 'status-thinking';
+            break;
+          case 'executingTool':
+            statusText = `Executing: ${state.status.name}`;
+            statusClass = 'status-executing';
+            break;
+          case 'awaitingApproval':
+            statusText = `Awaiting: ${state.status.tool}`;
+            statusClass = 'status-awaiting';
+            break;
+          case 'waitingForUser':
+            statusText = 'Waiting for User';
+            statusClass = 'status-waiting';
+            break;
+          default:
+            statusText = 'Idle';
+        }
+
+        statusEl.textContent = statusText;
+        statusEl.className = `session-status ${statusClass}`;
+      }
+    }
+
+    async function selectSession(sessionId) {
+      selectedSessionId = sessionId;
+
+      // Start monitoring
+      await api.startMonitoring(sessionId);
+
+      // Get current state
+      const state = await api.getSessionState(sessionId);
+
+      // Show activity panel
+      const panel = document.getElementById('activityPanel');
+      panel.classList.add('open');
+
+      if (state && state.recentActivities) {
+        renderActivities(state.recentActivities);
+      }
+    }
+
+    function renderActivities(activities) {
+      const list = document.getElementById('activityList');
+      list.innerHTML = activities.slice(-20).reverse().map(activity => `
+        <div class="activity-item">
+          <div class="activity-type">${activity.activityType.type}</div>
+          <div>${activity.description}</div>
+          <div class="activity-time">${new Date(activity.timestamp).toLocaleTimeString()}</div>
+        </div>
+      `).join('');
+    }
+
+    function formatTimeAgo(date) {
+      const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+
+      if (seconds < 60) return 'just now';
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+      return `${Math.floor(seconds / 86400)}d ago`;
+    }
+
+    // Close activity panel when clicking outside
+    document.addEventListener('click', (e) => {
+      const panel = document.getElementById('activityPanel');
+      if (panel.classList.contains('open') && 
+          !panel.contains(e.target) && 
+          !e.target.closest('.session-card')) {
+        panel.classList.remove('open');
+        if (selectedSessionId) {
+          api.stopMonitoring(selectedSessionId);
+          selectedSessionId = null;
+        }
+      }
+    });
+
+    // Initialize on load
+    init();
+  </script>
+</body>
+</html>
