@@ -280,6 +280,7 @@
         <button id="quickStartBtn" class="primary" title="Start a new session with a mission">🚀 Quick Start</button>
         <button id="refreshBtn">🔄</button>
       </div>
+      <div style="padding:4px 12px;"><button onclick="collapseAllRepos()" style="width:100%;padding:4px;font-size:11px;background:#1a1a2e;border:1px solid #0f3460;color:#8b949e;cursor:pointer;border-radius:4px;">▲ Collapse All</button></div>
       <div class="repo-list" id="repoList"></div>
     </div>
     <div class="main-content">
@@ -766,6 +767,7 @@
     async function addRepository() { await api.addRepository(); await loadData(); }
     async function removeRepo(p) { if (confirm(`Remove?\n${p}`)) { await api.removeRepository(p); await loadData(); } }
     function toggleRepo(p) { const r = repositories.find(x => x.path === p); if (r) { r.isExpanded = !r.isExpanded; renderSidebar(); } }
+    function collapseAllRepos() { repositories.forEach(r => r.isExpanded = false); renderSidebar(); }
     async function openTerm(dir, branch, mission) { 
       if (embeddedTerminalAvailable) {
         // Use embedded terminal
