@@ -93,9 +93,9 @@
     .modal input, .modal select, .modal textarea { width: 100%; padding: 10px 12px; margin-bottom: 16px; background: #1a1a2e; border: 1px solid #0f3460; border-radius: 6px; color: #eee; font-size: 14px; }
     .modal input:focus, .modal select:focus, .modal textarea:focus { outline: none; border-color: #e94560; }
     .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
-    .activity-panel { position: fixed; right: 0; top: 0; width: 400px; height: 100vh; background: #16213e; border-left: 1px solid #0f3460; padding: 24px; transform: translateX(100%); transition: transform 0.3s; overflow-y: auto; z-index: 50; }
+    .activity-panel { position: fixed; right: 0; top: 0; width: 400px; height: 100vh; background: #16213e; border-left: 1px solid #0f3460; padding: 0; transform: translateX(100%); transition: transform 0.3s; overflow-y: auto; z-index: 50; }
     .activity-panel.open { transform: translateX(0); }
-    .activity-panel h2 { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+    .activity-panel h2 { margin: 0; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: #16213e; z-index: 1; border-bottom: 1px solid #0f3460; }
     .activity-item { padding: 10px 12px; background: #1a1a2e; border-radius: 6px; margin-bottom: 8px; font-size: 12px; }
     .activity-type { font-size: 10px; color: #e94560; margin-bottom: 4px; text-transform: uppercase; }
     .activity-time { font-size: 10px; color: #666; margin-top: 4px; }
@@ -339,8 +339,10 @@
     </div>
     <div class="activity-panel" id="activityPanel">
       <h2>Session Activity <button class="close-btn" id="closeActivityBtn">✕</button></h2>
-      <div id="pendingQuestionContainer" style="display:none;"></div>
-      <div id="activityList"></div>
+      <div style="padding: 16px 24px;">
+        <div id="pendingQuestionContainer" style="display:none;"></div>
+        <div id="activityList"></div>
+      </div>
     </div>
     <!-- Stats Panel -->
     <div class="stats-panel" id="statsPanel">
