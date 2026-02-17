@@ -4,22 +4,28 @@
   "main": "dist/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "electron .",
+    "start": "concurrently \"tsc --watch --preserveWatchOutput\" \"electron .\"",
     "build": "tsc",
-    "dev": "tsc && electron .",
-    "package": "electron-builder"
+    "dev": "concurrently \"tsc --watch --preserveWatchOutput\" \"electron .\"",
+    "package": "electron-builder",
+    "postinstall": "node scripts/patch-node-pty.js && npx electron-rebuild"
   },
   "keywords": [],
   "author": "GHCP-Agent-Hub",
   "license": "MIT",
   "description": "GitHub Copilot CLI Session Manager",
   "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "chokidar": "^5.0.0",
     "electron": "^40.1.0",
+    "electron-updater": "^6.7.3",
+    "node-pty": "^1.1.0",
     "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@types/node": "^25.1.0",
+    "concurrently": "^9.2.1",
     "electron-builder": "^26.4.0",
     "typescript": "^5.9.3"
   }

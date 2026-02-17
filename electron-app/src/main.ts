@@ -636,6 +636,21 @@ app.whenReady().then(async () => {
   createTray();
   setupAutoUpdater();
 
+  // Dev mode: watch renderer files for auto-reload
+  if (!app.isPackaged) {
+    const fs = require('fs');
+    const rendererPath = path.join(__dirname, '..', 'renderer', 'index.html');
+    let debounce: NodeJS.Timeout | null = null;
+    fs.watch(path.dirname(rendererPath), { recursive: true }, () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        console.log('[dev] Renderer changed, reloading...');
+        mainWindow?.webContents.reloadIgnoringCache();
+      }, 300);
+    });
+    console.log('[dev] Watching renderer for changes');
+  }
+
   // Initial session scan and tray stats update
   monitorService.scanAllSessions().then((sessions) => {
     console.log(`Found ${sessions.length} Copilot sessions`);
