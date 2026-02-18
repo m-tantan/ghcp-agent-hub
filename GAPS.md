@@ -68,9 +68,9 @@ Last Updated: 2026-02-15
 ## How to Run
 
 ```bash
-cd C:\SOC\GHCP-Agent-Hub\electron-app
+cd electron-app
 npm install --no-fund --no-audit
-npm run dev
+npm start
 ```
 
 ## Files Structure
