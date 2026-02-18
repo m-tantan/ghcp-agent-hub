@@ -14,6 +14,7 @@ import {
   SessionMonitorState,
   WorkspaceMetadata,
   PendingToolUse,
+  PendingUserQuestion,
 } from '../models/types';
 import {
   ParseResult,
@@ -308,6 +309,7 @@ export class SessionFileWatcher extends EventEmitter {
       model: result.model,
       gitBranch: result.gitBranch ?? metadata?.branch,
       pendingToolUse,
+      pendingQuestion: result.pendingQuestion,
       recentActivities: result.recentActivities,
     };
   }

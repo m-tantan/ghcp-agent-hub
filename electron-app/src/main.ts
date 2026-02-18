@@ -364,7 +364,8 @@ function setupIPC(): void {
   ipcMain.handle('terminal-create', async (_event, terminalId: string, cwd: string, sessionId?: string, mission?: string) => {
     const cli = await findCopilotExecutable();
     const copilotPath = cli ? cli.path : undefined;
-    return terminalService.createTerminal(terminalId, cwd, copilotPath, sessionId, mission);
+    const copilotCommand = cli ? cli.command : undefined;
+    return terminalService.createTerminal(terminalId, cwd, copilotPath, sessionId, mission, copilotCommand);
   });
 
   // Write to terminal
@@ -452,8 +453,10 @@ function setupIPC(): void {
 
   // === GLOBAL STATS ===
 
-  // Get aggregated stats
-  ipcMain.handle('get-global-stats', () => {
+  // Get aggregated stats (triggers fresh session scan on-demand)
+  ipcMain.handle('get-global-stats', async () => {
+    const sessions = await monitorService.scanAllSessions();
+    updateTrayStats(sessions);
     return globalStatsService.getGlobalStats();
   });
 
@@ -587,15 +590,33 @@ app.whenReady().then(async () => {
   globalSearchService = new GlobalSearchService();
   notificationService = new NotificationService();
 
-  // Forward terminal events to renderer
+  // Forward terminal events to renderer (batched to reduce IPC overhead)
+  const termBuffers: Map<string, string> = new Map();
+  let termFlushTimer: ReturnType<typeof setTimeout> | null = null;
   terminalService.on('data', (event: { terminalId: string; data: string }) => {
-    mainWindow?.webContents.send('terminal-data', event);
+    const existing = termBuffers.get(event.terminalId) || '';
+    termBuffers.set(event.terminalId, existing + event.data);
+    if (!termFlushTimer) {
+      termFlushTimer = setTimeout(() => {
+        for (const [tid, buf] of termBuffers) {
+          mainWindow?.webContents.send('terminal-data', { terminalId: tid, data: buf });
+        }
+        termBuffers.clear();
+        termFlushTimer = null;
+      }, 16); // ~60fps
+    }
   });
   terminalService.on('exit', (event: { terminalId: string; exitCode: number }) => {
+    // Flush any remaining data for this terminal before sending exit
+    const remaining = termBuffers.get(event.terminalId);
+    if (remaining) {
+      mainWindow?.webContents.send('terminal-data', { terminalId: event.terminalId, data: remaining });
+      termBuffers.delete(event.terminalId);
+    }
     mainWindow?.webContents.send('terminal-exit', event);
   });
 
-  // Forward file watcher events to renderer, update stats, and send notifications
+  // Forward file watcher events to renderer and send notifications
   fileWatcher.on('stateUpdate', (update: StateUpdate) => {
     mainWindow?.webContents.send('session-state-update', update);
 
@@ -611,9 +632,6 @@ app.whenReady().then(async () => {
     } else {
       notificationService.clearSession(update.sessionId);
     }
-
-    // Re-scan to update tray stats when session state changes
-    monitorService.scanAllSessions().then(updateTrayStats);
   });
 
   // Forward monitor service events and update tray

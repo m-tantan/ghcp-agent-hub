@@ -34,10 +34,13 @@ export class TerminalService extends EventEmitter {
   constructor() {
     super();
     this._isAvailable = pty !== null;
-    // Determine shell based on platform
-    this.shell = process.platform === 'win32' 
-      ? 'powershell.exe'
-      : process.env.SHELL || '/bin/bash';
+    // Determine shell based on platform - prefer pwsh over powershell.exe
+    if (process.platform === 'win32') {
+      const pwshPath = process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'PowerShell', '7', 'pwsh.exe') : null;
+      this.shell = (pwshPath && fs.existsSync(pwshPath)) ? pwshPath : 'powershell.exe';
+    } else {
+      this.shell = process.env.SHELL || '/bin/bash';
+    }
   }
 
   /**
@@ -55,7 +58,8 @@ export class TerminalService extends EventEmitter {
     cwd: string,
     copilotPath?: string,
     copilotSessionId?: string,
-    mission?: string
+    mission?: string,
+    copilotCommand?: string
   ): string | null {
     if (!pty) {
       console.error('Cannot create terminal: node-pty not available');
@@ -128,6 +132,7 @@ export class TerminalService extends EventEmitter {
     });
 
     ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
+      console.log(`[TerminalService] Terminal ${terminalId} exited with code ${exitCode} (cwd: ${cwd}, session: ${copilotSessionId || 'none'})`);
       this.emit('exit', { terminalId, exitCode });
       this.terminals.delete(terminalId);
     });
@@ -135,16 +140,17 @@ export class TerminalService extends EventEmitter {
     // If copilot path provided, start copilot
     if (copilotPath) {
       setTimeout(() => {
+        // Build the base command: either `& "copilot.exe"` or `& "gh.exe" copilot`
+        const isGh = copilotCommand === 'gh copilot';
+        const baseCmd = isGh ? `& "${copilotPath}" copilot` : `& "${copilotPath}"`;
+        
         let command: string;
         if (copilotSessionId) {
-          // Resume existing session
-          command = `& "${copilotPath}" --resume "${copilotSessionId}"\r`;
+          command = `${baseCmd} --resume "${copilotSessionId}"\r`;
         } else if (mission) {
-          // Start with mission
-          command = `& "${copilotPath}" -i "${mission.replace(/"/g, '\\"')}"\r`;
+          command = `${baseCmd} -i "${mission!.replace(/"/g, '\\"')}"\r`;
         } else {
-          // Start new session
-          command = `& "${copilotPath}"\r`;
+          command = `${baseCmd}\r`;
         }
         ptyProcess.write(command);
       }, 500);

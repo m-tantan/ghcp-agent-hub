@@ -42,3 +42,8 @@ logs/
 # Environment
 .env
 .env.local
+
+# Node / Electron
+node_modules/
+electron-app/dist/
+electron-app/node_modules/

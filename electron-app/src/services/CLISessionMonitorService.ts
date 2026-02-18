@@ -18,6 +18,7 @@ import {
   SelectedRepository,
 } from '../models/types';
 import { parseSessionFile } from './SessionEventsParser';
+import { ConfigService, PersistedRepository } from './ConfigService';
 
 const execAsync = promisify(exec);
 
@@ -27,10 +28,56 @@ const execAsync = promisify(exec);
 export class CLISessionMonitorService extends EventEmitter {
   private copilotDataPath: string;
   private selectedRepositories: SelectedRepository[] = [];
+  private configService: ConfigService | null = null;
 
   constructor(copilotDataPath?: string) {
     super();
     this.copilotDataPath = copilotDataPath ?? this.getDefaultCopilotPath();
+  }
+
+  /**
+   * Set the config service for persistence
+   */
+  setConfigService(configService: ConfigService): void {
+    this.configService = configService;
+  }
+
+  /**
+   * Load saved repositories from config and restore them
+   */
+  async loadSavedRepositories(): Promise<void> {
+    if (!this.configService) return;
+
+    const savedRepos = this.configService.loadRepositories();
+    for (const saved of savedRepos) {
+      // Only restore if the path still exists
+      if (fs.existsSync(saved.path)) {
+        await this.addRepository(saved.path, false); // Don't save during load
+        // Restore isExpanded state
+        const repo = this.selectedRepositories.find(r => r.path === saved.path);
+        if (repo) {
+          repo.isExpanded = saved.isExpanded;
+        }
+      }
+    }
+
+    if (savedRepos.length > 0) {
+      this.emit('repositoriesChanged', this.selectedRepositories);
+    }
+  }
+
+  /**
+   * Save current repositories to config
+   */
+  private saveRepositories(): void {
+    if (!this.configService) return;
+
+    const toSave: PersistedRepository[] = this.selectedRepositories.map(repo => ({
+      path: repo.path,
+      isExpanded: repo.isExpanded,
+    }));
+
+    this.configService.saveRepositories(toSave);
   }
 
   private getDefaultCopilotPath(): string {
@@ -48,7 +95,7 @@ export class CLISessionMonitorService extends EventEmitter {
   /**
    * Add a repository to monitor
    */
-  async addRepository(repoPath: string): Promise<SelectedRepository | undefined> {
+  async addRepository(repoPath: string, persist: boolean = true): Promise<SelectedRepository | undefined> {
     if (this.selectedRepositories.some(r => r.path === repoPath)) {
       return this.selectedRepositories.find(r => r.path === repoPath);
     }
@@ -64,6 +111,10 @@ export class CLISessionMonitorService extends EventEmitter {
     this.selectedRepositories.push(repository);
     await this.refreshSessions();
 
+    if (persist) {
+      this.saveRepositories();
+    }
+
     return repository;
   }
 
@@ -72,6 +123,7 @@ export class CLISessionMonitorService extends EventEmitter {
    */
   removeRepository(repoPath: string): void {
     this.selectedRepositories = this.selectedRepositories.filter(r => r.path !== repoPath);
+    this.saveRepositories();
     this.emit('repositoriesChanged', this.selectedRepositories);
   }
 

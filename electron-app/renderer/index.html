@@ -33,7 +33,7 @@
     .repo-actions button:hover { background: #0f3460; }
     .repo-color-btn { background: none; border: 2px solid #555; width: 14px; height: 14px; cursor: pointer; border-radius: 2px; padding: 0; margin: 0 2px; flex-shrink: 0; }
     .repo-color-btn:hover { border-color: #fff; }
-    .repo-color-picker { display: none; position: absolute; top: 32px; left: 4px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px; z-index: 100; gap: 4px; flex-wrap: wrap; width: 108px; }
+    .repo-color-picker { display: none; position: fixed; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px; z-index: 300; gap: 4px; flex-wrap: wrap; width: 108px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
     .repo-color-picker.open { display: flex; }
     .worktree-list { padding: 0 8px 8px 8px; }
     .worktree-item { padding: 8px 12px; margin-top: 4px; background: #16213e; border-radius: 4px; font-size: 12px; }
@@ -149,9 +149,9 @@
     .terminal-panel-minimize-btn { background: none; border: none; color: #8b949e; cursor: pointer; padding: 2px 6px; font-size: 12px; }
     .terminal-panel-minimize-btn:hover { color: #f59e0b; }
     /* Terminal color picker */
-    .term-color-btn { background: none; border: 2px solid #8b949e; width: 14px; height: 14px; cursor: pointer; border-radius: 2px; padding: 0; margin: 0 2px; }
+    .term-color-btn { border: 2px solid #8b949e; width: 14px; height: 14px; cursor: pointer; border-radius: 2px; padding: 0; margin: 0 2px; }
     .term-color-btn:hover { border-color: #fff; }
-    .term-color-picker { display: none; position: absolute; top: 28px; left: 4px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px; z-index: 100; gap: 4px; flex-wrap: wrap; width: 108px; }
+    .term-color-picker { display: none; position: fixed; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px; z-index: 300; gap: 4px; flex-wrap: wrap; width: 108px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
     .term-color-picker.open { display: flex; }
     .term-color-swatch { width: 20px; height: 20px; border-radius: 3px; cursor: pointer; border: 2px solid transparent; }
     .term-color-swatch:hover { border-color: #fff; transform: scale(1.15); }
@@ -417,6 +417,7 @@
     </div>
   <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../node_modules/@xterm/addon-webgl/lib/addon-webgl.js"></script>
   <script>
     const api = window.electronAPI;
     let sessions = [], repositories = [], selectedSessionId = null, currentRepoForWorktree = null, searchQuery = '';
@@ -441,6 +442,20 @@
     const terminalColors = {}; // termId -> color
     let repoColors = {}; // repo path -> base color hex
     const TERMINAL_PALETTE = ['#e94560','#4ade80','#60a5fa','#f59e0b','#a78bfa','#fb923c','#22d3ee','#f472b6','#34d399','#fbbf24'];
+    
+    function hashColor(name) {
+      // Use golden angle (137.508°) multiplied by a hash seed for maximum hue spread
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) {
+        hash = ((hash << 5) - hash) + name.charCodeAt(i);
+        hash |= 0;
+      }
+      // Golden angle ensures consecutive hashes spread across the hue wheel
+      const hue = (Math.abs(hash) * 137.508) % 360;
+      const sat = 65 + (Math.abs(hash >> 8) % 20); // 65-85%
+      const lit = 55 + (Math.abs(hash >> 16) % 15); // 55-70%
+      return `hsl(${Math.round(hue)}, ${sat}%, ${lit}%)`;
+    }
 
     // Shade generation: derive lighter/darker variations of a base color for worktrees
     function hexToHSL(hex) {
@@ -463,10 +478,16 @@
       const toHex = x => Math.round(x*255).toString(16).padStart(2,'0');
       return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
     }
+    function parseColorToHSL(color) {
+      if (color.startsWith('hsl')) {
+        const m = color.match(/hsl\((\d+),\s*(\d+)%?,\s*(\d+)%?\)/);
+        if (m) return { h: +m[1], s: +m[2], l: +m[3] };
+      }
+      return hexToHSL(color);
+    }
     function getWorktreeShade(baseColor, worktreeIndex, totalWorktrees) {
-      const { h, s, l } = hexToHSL(baseColor);
+      const { h, s, l } = parseColorToHSL(baseColor);
       if (totalWorktrees <= 1) return baseColor;
-      // Spread lightness from 30% to 70% across worktrees
       const minL = Math.max(25, l - 20);
       const maxL = Math.min(80, l + 20);
       const step = (maxL - minL) / (totalWorktrees - 1);
@@ -505,10 +526,23 @@
       api.onRepositoriesChanged(r => { repositories = r; renderSidebar(); });
       api.onSessionStateUpdate(updateSessionState);
       
-      // Terminal events
+      // Terminal events - batch writes to reduce render overhead
+      const termDataBuffers = new Map(); // terminalId -> pending data
+      let termFlushScheduled = false;
       api.onTerminalData(({ terminalId, data }) => {
-        const t = terminals.get(terminalId);
-        if (t) t.term.write(data);
+        const existing = termDataBuffers.get(terminalId) || '';
+        termDataBuffers.set(terminalId, existing + data);
+        if (!termFlushScheduled) {
+          termFlushScheduled = true;
+          requestAnimationFrame(() => {
+            for (const [tid, buf] of termDataBuffers) {
+              const t = terminals.get(tid);
+              if (t) t.term.write(buf);
+            }
+            termDataBuffers.clear();
+            termFlushScheduled = false;
+          });
+        }
       });
       api.onTerminalExit(({ terminalId, exitCode }) => {
         console.log(`Terminal ${terminalId} exited with code ${exitCode}`);
@@ -553,11 +587,15 @@
           if (currentDiffCwd) loadDiff(currentDiffCwd, currentDiffMode);
         });
       });
-      // Close search results when clicking outside
+      // Close search results and color pickers when clicking outside
       document.addEventListener('click', e => {
         const panel = document.getElementById('searchResultsPanel');
         const input = document.getElementById('searchInput');
         if (!panel.contains(e.target) && e.target !== input) panel.classList.remove('open');
+        // Close any open color pickers
+        if (!e.target.closest('.term-color-btn') && !e.target.closest('.term-color-picker') && !e.target.closest('.repo-color-btn') && !e.target.closest('.repo-color-picker')) {
+          document.querySelectorAll('.term-color-picker.open, .repo-color-picker.open').forEach(p => p.classList.remove('open'));
+        }
       });
       // Setup filter buttons
       document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -613,23 +651,21 @@
       const el = document.getElementById('repoList');
       if (!repositories.length) { el.innerHTML = '<div style="text-align:center;padding:24px;color:#666"><p>No repos</p><p style="font-size:11px;margin-top:8px">Click "Add Repo"</p></div>'; return; }
       el.innerHTML = repositories.map(r => {
-        const repoColor = repoColors[r.path] || null;
-        const colorPickerHtml = `<div class="repo-color-picker" id="repoColorPicker-${escJs(r.path)}">${TERMINAL_PALETTE.map(c => `<div class="term-color-swatch" style="background:${c}" onclick="event.stopPropagation(); setRepoColor('${escJs(r.path)}','${c}')"></div>`).join('')}</div>`;
-        const borderStyle = repoColor ? ` style="border-left: 3px solid ${repoColor}"` : '';
+        const repoName = r.path.split(/[/\\]/).pop();
+        const repoColor = repoColors[r.path] || hashColor(repoName);
+        const borderStyle = ` style="border-left: 4px solid ${repoColor}"`;
         return `
         <div class="repo-item"${borderStyle}>
-          <div class="repo-header ${r.isExpanded?'expanded':''}" onclick="toggleRepo('${escJs(r.path)}')" style="position:relative">
-            <button class="repo-color-btn" style="background:${repoColor || '#555'}" onclick="event.stopPropagation(); toggleRepoColorPicker('${escJs(r.path)}')" title="Set repo color"></button>
-            ${colorPickerHtml}
-            <span class="chevron">▶</span><span class="repo-name">📁 ${esc(r.path.split(/[/\\]/).pop())}</span>
+          <div class="repo-header ${r.isExpanded?'expanded':''}" onclick="toggleRepo('${escJs(r.path)}')">
+            <span class="chevron">▶</span><span class="repo-name">📁 ${esc(repoName)}</span>
             <div class="repo-actions" onclick="event.stopPropagation()">
               <button onclick="showCreateWorktree('${escJs(r.path)}')" title="New Worktree">🌿</button>
               <button onclick="removeRepo('${escJs(r.path)}')" title="Remove">✕</button>
             </div>
           </div>
           ${r.isExpanded ? `<div class="worktree-list">${r.worktrees.map((w, wi) => {
-            const shade = repoColor ? getWorktreeShade(repoColor, wi, r.worktrees.length) : null;
-            const wtBorder = shade ? `border-left: 3px solid ${shade};` : '';
+            const shade = getWorktreeShade(repoColor, wi, r.worktrees.length);
+            const wtBorder = `border-left: 4px solid ${shade};`;
             return `
             <div class="worktree-item" style="${wtBorder}">
               <div class="worktree-header"><span>${w.isWorktree?'🌿':'📂'}</span><span class="worktree-branch">${esc(w.name)}</span><span style="color:#888;font-size:10px">(${w.sessions.length})</span></div>
@@ -747,6 +783,14 @@
       }
     }
 
+    // Throttle renderSessions calls from state updates
+    let renderSessionsTimer = null;
+    function throttledRenderSessions() {
+      if (!renderSessionsTimer) {
+        renderSessionsTimer = setTimeout(() => { renderSessionsTimer = null; renderSessions(); }, 1000);
+      }
+    }
+
     function updateSessionState(u) {
       // Store state for filtering
       if (u.state?.status) {
@@ -762,8 +806,8 @@
         if (u.state.pendingQuestion) renderPendingQuestion(u.state.pendingQuestion, u.sessionId);
         else hidePendingQuestion();
       }
-      // Re-render if filter might exclude/include this session
-      if (currentFilter !== 'all') renderSessions();
+      // Re-render if filter might exclude/include this session (throttled)
+      if (currentFilter !== 'all') throttledRenderSessions();
     }
 
     async function addRepository() { await api.addRepository(); await loadData(); }
@@ -1058,7 +1102,9 @@
       const term = new Terminal({
         cursorBlink: true, fontSize: 13,
         fontFamily: 'Consolas, "Courier New", monospace',
-        theme: { background: '#0d1117', foreground: '#e6edf3', cursor: '#e94560', selection: 'rgba(233, 69, 96, 0.3)' }
+        theme: { background: '#0d1117', foreground: '#e6edf3', cursor: '#e94560', selection: 'rgba(233, 69, 96, 0.3)' },
+        fastScrollModifier: 'alt',
+        scrollback: 5000,
       });
       const fitAddon = new FitAddon.FitAddon();
       term.loadAddon(fitAddon);
@@ -1077,20 +1123,26 @@
       // Auto-derive color from repo color scheme if no explicit color
       if (!color) {
         const normCwd = cwd.replace(/\\/g, '/').toLowerCase();
+        let bestMatch = null;
+        let bestLen = 0;
+        // Find the most specific (longest path) matching repo/worktree
         for (const r of repositories) {
-          const baseColor = repoColors[r.path];
-          if (!baseColor) continue;
-          const normRepo = r.path.replace(/\\/g, '/').toLowerCase();
+          const repoName = r.path.split(/[/\\]/).pop();
+          const baseColor = repoColors[r.path] || hashColor(repoName);
           for (let wi = 0; wi < r.worktrees.length; wi++) {
             const normWt = r.worktrees[wi].path.replace(/\\/g, '/').toLowerCase();
-            if (normCwd === normWt || normCwd.startsWith(normWt + '/')) {
-              color = getWorktreeShade(baseColor, wi, r.worktrees.length);
-              break;
+            if ((normCwd === normWt || normCwd.startsWith(normWt + '/')) && normWt.length > bestLen) {
+              bestLen = normWt.length;
+              bestMatch = { baseColor, wi, total: r.worktrees.length };
             }
           }
-          if (color) break;
+        }
+        if (bestMatch) {
+          color = getWorktreeShade(bestMatch.baseColor, bestMatch.wi, bestMatch.total);
         }
       }
+      // Fallback: hash the folder name
+      if (!color) color = hashColor(folderName);
       
       const wrapper = document.createElement('div');
       wrapper.className = 'terminal-instance';
@@ -1101,14 +1153,14 @@
       const header = document.createElement('div');
       header.className = 'terminal-instance-header';
       header.style.position = 'relative';
-      if (color) header.style.borderBottom = `3px solid ${color}`;
+      if (color) header.style.borderBottom = `4px solid ${color}`;
       
       // Custom terminal name (editable memo)
       const customNameId = `termName-${termId}`;
       const nameDisplayHtml = `<span class="term-custom-name" id="${customNameId}" onclick="event.stopPropagation(); editTermName('${termId}')" title="Click to add memo"></span><button class="term-add-name" onclick="event.stopPropagation(); editTermName('${termId}')" title="Add memo">✏</button>`;
       
       header.innerHTML = `
-        <div style="display:flex;align-items:center;gap:4px;">
+        <div style="display:flex;align-items:center;gap:4px;position:relative;">
           <button class="term-color-btn" style="background:${color || '#8b949e'}" onclick="event.stopPropagation(); toggleColorPicker('${termId}')" title="Change color"></button>
           ${colorPickerHtml}
           <button class="terminal-instance-minimize" onclick="toggleMinimizeTerminal('${termId}')" title="Minimize">&#x25BC;</button>
@@ -1126,6 +1178,14 @@
       
       document.getElementById('terminalContainer').appendChild(wrapper);
       term.open(termArea);
+      // Load WebGL renderer AFTER open() for GPU-accelerated rendering
+      try {
+        if (typeof WebglAddon !== 'undefined') {
+          const wgl = new WebglAddon.WebglAddon();
+          wgl.onContextLost(() => { wgl.dispose(); });
+          term.loadAddon(wgl);
+        }
+      } catch (e) { console.warn('WebGL addon failed, using DOM renderer:', e); }
       fitAddon.fit();
       
       term.onData(data => api.terminalWrite(termId, data));
@@ -1139,11 +1199,19 @@
           }).catch(() => {});
           return false;
         }
+        if (e.type === 'keydown' && e.ctrlKey && e.shiftKey && e.key === 'E') {
+          e.preventDefault();
+          api.openFolder(cwd);
+          return false;
+        }
         if (e.type === 'keydown' && e.ctrlKey && e.key === 'f') {
           return false; // Let document handler open terminal search
         }
         return true;
       });
+      
+      // Track focused terminal
+      term.textarea.addEventListener('focus', () => { activeTerminalId = termId; });
       
       terminals.set(termId, { term, fitAddon, cwd, sessionId, color });
       if (color) terminalColors[termId] = color;
@@ -1157,7 +1225,15 @@
     function toggleColorPicker(termId) {
       document.querySelectorAll('.term-color-picker.open').forEach(p => p.classList.remove('open'));
       const picker = document.getElementById(`colorPicker-${termId}`);
-      if (picker) picker.classList.toggle('open');
+      if (!picker) return;
+      // Position relative to the color button
+      const btn = picker.previousElementSibling || picker.parentElement.querySelector('.term-color-btn');
+      if (btn) {
+        const rect = btn.getBoundingClientRect();
+        picker.style.top = (rect.bottom + 4) + 'px';
+        picker.style.left = rect.left + 'px';
+      }
+      picker.classList.toggle('open');
     }
     
     function setTermColor(termId, color) {
@@ -1168,7 +1244,7 @@
       const wrapper = document.getElementById(`terminal-${termId}`);
       if (wrapper) {
         const header = wrapper.querySelector('.terminal-instance-header');
-        if (header) header.style.borderBottom = `3px solid ${color}`;
+        if (header) header.style.borderBottom = `4px solid ${color}`;
         const btn = wrapper.querySelector('.term-color-btn');
         if (btn) btn.style.background = color;
       }
@@ -1180,7 +1256,14 @@
     function toggleRepoColorPicker(repoPath) {
       document.querySelectorAll('.repo-color-picker.open').forEach(p => p.classList.remove('open'));
       const picker = document.getElementById(`repoColorPicker-${repoPath}`);
-      if (picker) picker.classList.toggle('open');
+      if (!picker) return;
+      const btn = picker.parentElement.querySelector('.repo-color-btn');
+      if (btn) {
+        const rect = btn.getBoundingClientRect();
+        picker.style.top = (rect.bottom + 4) + 'px';
+        picker.style.left = rect.right + 'px';
+      }
+      picker.classList.toggle('open');
     }
     
     function setRepoColor(repoPath, color) {
@@ -1563,6 +1646,25 @@
     let termSearchMatches = [];
 
     document.addEventListener('keydown', e => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'E') {
+        // Skip if xterm already handled it
+        if (e.target.closest('.terminal-instance')) return;
+        
+        e.preventDefault();
+        // Open folder of the last focused terminal
+        if (activeTerminalId) {
+          const t = terminals.get(activeTerminalId);
+          if (t) { api.openFolder(t.cwd); return; }
+        }
+        // No active terminal
+        const panel = document.getElementById('terminalPanel');
+        if (panel && panel.classList.contains('open') && terminals.size > 0) {
+          // Use the first terminal
+          const first = terminals.values().next().value;
+          if (first) { api.openFolder(first.cwd); return; }
+        }
+        alert('Please focus on a terminal first (Ctrl+Shift+E opens its folder in Explorer)');
+      }
       if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
         openTerminalSearch();

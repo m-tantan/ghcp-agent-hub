@@ -13,6 +13,7 @@ import {
   ActivityType,
   CodeChangeInput,
   PendingToolUse,
+  PendingUserQuestion,
 } from '../models/types';
 
 /**
@@ -50,6 +51,7 @@ export interface ParseResult {
   messageCount: number;
   toolCalls: Record<string, number>;
   pendingToolUses: Map<string, PendingToolInfo>;
+  pendingQuestion?: PendingUserQuestion;
   recentActivities: ActivityEntry[];
   lastActivityAt?: Date;
   sessionStartedAt?: Date;
@@ -266,6 +268,16 @@ function processEvent(event: SessionEvent, result: ParseResult): void {
             const inputPreview = extractInputPreview(args);
             const codeChangeInput = extractCodeChangeInput(name, args);
 
+            // Check for ask_user tool - track pending question
+            if (name === 'ask_user' && args) {
+              result.pendingQuestion = {
+                toolCallId,
+                question: (args.question as string) ?? 'Question',
+                choices: args.choices as string[] | undefined,
+                timestamp: timestamp ?? new Date(),
+              };
+            }
+
             // Add to pending
             result.pendingToolUses.set(toolCallId, {
               toolName: name,
@@ -300,6 +312,11 @@ function processEvent(event: SessionEvent, result: ParseResult): void {
         const pending = result.pendingToolUses.get(toolCallId);
         const toolName = pending?.toolName ?? 'unknown';
         result.pendingToolUses.delete(toolCallId);
+
+        // Clear pending question if this was the ask_user response
+        if (result.pendingQuestion?.toolCallId === toolCallId) {
+          result.pendingQuestion = undefined;
+        }
 
         const isError = data.isError as boolean | undefined ?? false;
 

@@ -70,6 +70,16 @@ export interface PendingToolUse {
 }
 
 /**
+ * Pending User Question - for ask_user tool
+ */
+export interface PendingUserQuestion {
+  toolCallId: string;
+  question: string;
+  choices?: string[];
+  timestamp: Date;
+}
+
+/**
  * Session Monitor State - complete monitoring state
  */
 export interface SessionMonitorState {
@@ -87,6 +97,7 @@ export interface SessionMonitorState {
   model?: string;
   gitBranch?: string;
   pendingToolUse?: PendingToolUse;
+  pendingQuestion?: PendingUserQuestion;
   recentActivities: ActivityEntry[];
 }
 
