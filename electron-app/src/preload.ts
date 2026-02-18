@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('terminal-destroy', terminalId),
   terminalList: () => ipcRenderer.invoke('terminal-list'),
   terminalAvailable: () => ipcRenderer.invoke('terminal-available'),
+  saveClipboardImage: () => ipcRenderer.invoke('save-clipboard-image'),
 
   // Terminal colors & persistence
   getTerminalColor: (sessionId: string) => ipcRenderer.invoke('get-terminal-color', sessionId),

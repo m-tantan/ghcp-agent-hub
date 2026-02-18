@@ -1191,12 +1191,20 @@
       term.onData(data => api.terminalWrite(termId, data));
       term.onResize(({ cols, rows }) => api.terminalResize(termId, cols, rows));
       
-      // Paste via Ctrl+V
+      // Paste via Ctrl+V — check for image first, then text
       term.attachCustomKeyEventHandler(e => {
         if (e.type === 'keydown' && e.ctrlKey && e.key === 'v') {
-          navigator.clipboard.readText().then(text => {
-            if (text) api.terminalWrite(termId, text);
-          }).catch(() => {});
+          (async () => {
+            // Try clipboard image first
+            const imgPath = await api.saveClipboardImage();
+            if (imgPath) {
+              api.terminalWrite(termId, `@${imgPath} `);
+            } else {
+              // Fall back to text paste
+              const text = await navigator.clipboard.readText().catch(() => '');
+              if (text) api.terminalWrite(termId, text);
+            }
+          })();
           return false;
         }
         if (e.type === 'keydown' && e.ctrlKey && e.shiftKey && e.key === 'E') {

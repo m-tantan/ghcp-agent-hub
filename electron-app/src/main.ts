@@ -4,7 +4,7 @@
  * GitHub Copilot CLI Session Manager
  */
 
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, shell, Notification } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, shell, Notification, clipboard } from 'electron';
 import * as path from 'path';
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
@@ -356,6 +356,19 @@ function setupIPC(): void {
   // Open folder in system file explorer
   ipcMain.handle('open-folder', (_event, folderPath: string) => {
     shell.openPath(folderPath);
+  });
+
+  // Save clipboard image to temp file and return the path
+  ipcMain.handle('save-clipboard-image', async () => {
+    const image = clipboard.readImage();
+    if (image.isEmpty()) return null;
+    const png = image.toPNG();
+    const tmpDir = app.getPath('temp');
+    const fileName = `copilot-paste-${Date.now()}.png`;
+    const filePath = path.join(tmpDir, fileName);
+    const fs = await import('fs');
+    fs.writeFileSync(filePath, png);
+    return filePath;
   });
 
   // === EMBEDDED TERMINAL ===
