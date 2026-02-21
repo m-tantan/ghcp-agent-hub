@@ -241,7 +241,10 @@ main { flex: 1; overflow: auto; padding: 24px; }
 .main-content.terminal-only-mode > header { display: none; }
 .main-content.terminal-only-mode > main#content { display: none; }
 .main-content.terminal-only-mode > .content-splitter { display: none !important; }
-.main-content.terminal-only-mode > .terminal-panel-minimized { display: none !important; }
+/* In terminal-only mode, allow the minimized bar to show (via .show) so the
+   user can restore the terminal panel — pin it to the bottom of the flex column */
+.main-content.terminal-only-mode > .terminal-panel-minimized { display: none; }
+.main-content.terminal-only-mode > .terminal-panel-minimized.show { display: flex; margin-top: auto; }
 .main-content.terminal-only-mode > .terminal-panel { flex: 1 !important; }
 .terminal-only-toggle { background: none; border: 1px solid #30363d; color: #8b949e; cursor: pointer; padding: 3px 8px; font-size: 11px; border-radius: 4px; }
 .terminal-only-toggle:hover { color: #e94560; border-color: #e94560; background: none; }
