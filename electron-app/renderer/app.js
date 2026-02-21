@@ -568,12 +568,17 @@ function expandSidebar() {
 function toggleTerminalPanel() {
   const panel = document.getElementById('terminalPanel');
   const splitter = document.getElementById('contentSplitter');
-  const minBar = document.getElementById('terminalPanelMinimized');
   if (panel.classList.contains('open')) {
     panel.classList.remove('open');
+    panel.classList.remove('panel-minimized');
     splitter.style.display = 'none';
-    minBar.classList.remove('show');
     document.getElementById('content').style.flex = '';
+    // Exit terminal-only mode so sessions remain visible
+    if (terminalOnlyMode) {
+      terminalOnlyMode = false;
+      applyTerminalOnlyMode();
+      api.setTerminalOnlyMode(false);
+    }
   } else {
     showTerminalPanel();
   }
@@ -600,6 +605,12 @@ function hideTerminalPanel() {
   panel.classList.remove('panel-minimized');
   splitter.style.display = 'none';
   document.getElementById('content').style.flex = '';
+  // Exit terminal-only mode so sessions remain visible
+  if (terminalOnlyMode) {
+    terminalOnlyMode = false;
+    applyTerminalOnlyMode();
+    api.setTerminalOnlyMode(false);
+  }
 }
 
 function minimizeTerminalPanel() {
