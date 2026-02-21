@@ -38,6 +38,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     title: 'GHCP Agent Hub',
+    icon: path.join(__dirname, '..', 'assets', 'icon_512.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -70,10 +71,7 @@ interface TraySessionStats {
 let currentTrayStats: TraySessionStats = { total: 0, active: 0, needingInput: 0 };
 
 function createTray(): void {
-  // Create a simple icon (you'd replace this with a real icon)
-  const icon = nativeImage.createFromDataURL(
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAADtSURBVDiNpZMxDoJAEEXfLhYmFjYewcpLeARbS29gYecNtLHkCFZewAtwBGq/jSzZJSxofMlkJvP/zDcLG4lS6gFsge0P2ARQRHQxbh/AB9gBe+ACnIGriDyBl3H7DqRBVQsj8wKs+kw+AC4i8gJu3+sD0Dc2MyB3cAfSToBfZQOvPqAEHkAWdPqx+gTOInL5lv4OvE08zYzNLOj0Y/UD/IBrkLsOE7ABciAJOn3L/gPgAnRBZxikIrIGzkDaBN6tLJB0AlKCTt+yR0BuZM7ACrgG3X7QCTptwbMxLgk6/dhTROR8A76BlXfpC6d+M29O/OJYAAAAASUVORK5CYII='
-  );
+  const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'icon_16.png'));
 
   tray = new Tray(icon);
   updateTrayTooltip();

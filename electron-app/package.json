@@ -20,9 +20,11 @@
     "directories": {
       "output": "release"
     },
+    "icon": "assets/icon_512.png",
     "files": [
       "dist/**/*",
       "renderer/**/*",
+      "assets/**/*",
       "package.json"
     ],
     "win": {
