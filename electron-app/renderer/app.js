@@ -658,7 +658,9 @@ function initSplitter() {
 function updateTerminalGrid() {
   const container = document.getElementById('terminalContainer');
   const count = terminals.size;
-  const cols = terminalsPerRow;
+  // Use fewer columns than the setting when there are fewer terminals,
+  // so a single terminal fills the full width.
+  const cols = Math.min(count || 1, terminalsPerRow);
   const rows = Math.max(1, Math.ceil(count / cols));
   container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
   container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
@@ -831,6 +833,9 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
     if (e.type === 'keydown' && (e.key === 'F1' || (e.shiftKey && e.key === '?'))) {
       return false; // Let document handler open shortcuts help
     }
+    if (e.type === 'keydown' && e.key === 'F2') {
+      return false; // Let document handler rename terminal
+    }
     return true;
   });
   
@@ -839,7 +844,15 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
   
   terminals.set(termId, { term, fitAddon, cwd, sessionId, color });
   if (color) terminalColors[termId] = color;
-  
+
+  // On first terminal, auto-switch to terminal-only mode so the sessions
+  // panel collapses and terminals fill the available space.
+  if (terminals.size === 1 && !terminalOnlyMode) {
+    terminalOnlyMode = true;
+    applyTerminalOnlyMode();
+    api.setTerminalOnlyMode(true);
+  }
+
   showTerminalPanel();
   updateTerminalGrid();
   setTimeout(() => { fitAddon.fit(); term.focus(); }, 150);
@@ -1333,6 +1346,11 @@ document.addEventListener('keydown', e => {
   if (e.key === 'F1' || (!e.ctrlKey && e.shiftKey && e.key === '?')) {
     e.preventDefault();
     toggleShortcutsHelp();
+  }
+  if (e.key === 'F2') {
+    e.preventDefault();
+    const tid = activeTerminalId || (terminals.size > 0 ? terminals.keys().next().value : null);
+    if (tid) editTermName(tid);
   }
   if (e.ctrlKey && e.key === 'm') {
     e.preventDefault();
