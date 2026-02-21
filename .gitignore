@@ -46,4 +46,5 @@ logs/
 # Node / Electron
 node_modules/
 electron-app/dist/
+electron-app/release/
 electron-app/node_modules/

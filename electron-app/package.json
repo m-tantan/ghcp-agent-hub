@@ -14,12 +14,36 @@
   "author": "GHCP-Agent-Hub",
   "license": "MIT",
   "description": "GitHub Copilot CLI Session Manager",
+  "build": {
+    "appId": "com.ghcp.agent-hub",
+    "productName": "GHCP Agent Hub",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        { "target": "portable", "arch": ["x64"] },
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
     "chokidar": "^5.0.0",
-    "electron": "^40.1.0",
     "electron-updater": "^6.7.3",
     "node-pty": "^1.1.0",
     "yaml": "^2.8.2"
@@ -28,6 +52,7 @@
     "@types/node": "^25.1.0",
     "concurrently": "^9.2.1",
     "electron-builder": "^26.4.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "electron": "^40.1.0"
   }
 }

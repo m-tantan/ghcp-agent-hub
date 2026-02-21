@@ -47,6 +47,7 @@ const CONFIG_FILENAME = 'agent-hub-config.json';
  */
 export class ConfigService {
   private configPath: string;
+  private _cache: AppConfig | null = null;
 
   constructor() {
     // Use electron's userData path for cross-platform config location
@@ -62,9 +63,11 @@ export class ConfigService {
   }
 
   /**
-   * Load configuration from disk
+   * Load configuration from disk (cached in memory)
    */
   loadConfig(): AppConfig {
+    if (this._cache) return this._cache;
+
     try {
       if (fs.existsSync(this.configPath)) {
         const content = fs.readFileSync(this.configPath, 'utf-8');
@@ -72,6 +75,7 @@ export class ConfigService {
         
         // Validate config structure
         if (config && Array.isArray(config.repositories)) {
+          this._cache = config;
           return config;
         }
       }
@@ -80,16 +84,19 @@ export class ConfigService {
     }
 
     // Return default empty config
-    return {
+    const defaultConfig: AppConfig = {
       version: CONFIG_VERSION,
       repositories: [],
     };
+    this._cache = defaultConfig;
+    return defaultConfig;
   }
 
   /**
-   * Save configuration to disk
+   * Save configuration to disk (updates cache immediately)
    */
   saveConfig(config: AppConfig): void {
+    this._cache = config;
     try {
       // Ensure directory exists
       const dir = path.dirname(this.configPath);

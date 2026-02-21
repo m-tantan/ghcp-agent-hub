@@ -16,6 +16,14 @@ import {
   PendingUserQuestion,
 } from '../models/types';
 
+/** Per-file parse cache keyed by absolute path */
+interface ParseCache {
+  result: ParseResult;
+  mtime: number;
+  size: number;
+}
+const _parseCache = new Map<string, ParseCache>();
+
 /**
  * Raw event from Copilot events.jsonl
  */
@@ -398,15 +406,54 @@ export function updateCurrentStatus(result: ParseResult, approvalTimeoutSeconds 
 }
 
 /**
- * Parse an entire session file
+ * Parse an entire session file, with incremental caching by mtime+size.
+ * Re-reads only new bytes when the file has grown.
  */
 export function parseSessionFile(filePath: string, approvalTimeoutSeconds = 5): ParseResult {
-  const result = createEmptyResult();
-
   if (!fs.existsSync(filePath)) {
-    return result;
+    return createEmptyResult();
   }
 
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    return createEmptyResult();
+  }
+
+  const mtime = stat.mtimeMs;
+  const size = stat.size;
+  const cached = _parseCache.get(filePath);
+
+  // Fully cached — mtime and size unchanged
+  if (cached && cached.mtime === mtime && cached.size === size) {
+    return cached.result;
+  }
+
+  // Incremental: file grew since last parse — read only new bytes
+  if (cached && size > cached.size && cached.mtime <= mtime) {
+    let newContent = '';
+    try {
+      const fd = fs.openSync(filePath, 'r');
+      const bytesToRead = size - cached.size;
+      const buf = Buffer.allocUnsafe(bytesToRead);
+      fs.readSync(fd, buf, 0, bytesToRead, cached.size);
+      fs.closeSync(fd);
+      newContent = buf.toString('utf-8');
+    } catch {
+      // Fall through to full re-parse on error
+    }
+    if (newContent) {
+      const newLines = newContent.split('\n');
+      parseNewLines(newLines, cached.result, approvalTimeoutSeconds);
+      cached.mtime = mtime;
+      cached.size = size;
+      return cached.result;
+    }
+  }
+
+  // Full parse
+  const result = createEmptyResult();
   const content = fs.readFileSync(filePath, 'utf-8');
   const lines = content.split('\n').filter(line => line.trim());
 
@@ -418,8 +465,15 @@ export function parseSessionFile(filePath: string, approvalTimeoutSeconds = 5): 
   }
 
   updateCurrentStatus(result, approvalTimeoutSeconds);
-
+  _parseCache.set(filePath, { result, mtime, size });
   return result;
+}
+
+/**
+ * Evict a session's parse cache entry (call when session is deleted).
+ */
+export function evictParseCache(filePath: string): void {
+  _parseCache.delete(filePath);
 }
 
 /**

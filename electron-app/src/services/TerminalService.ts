@@ -59,7 +59,8 @@ export class TerminalService extends EventEmitter {
     copilotPath?: string,
     copilotSessionId?: string,
     mission?: string,
-    copilotCommand?: string
+    copilotCommand?: string,
+    skipCopilot?: boolean
   ): string | null {
     if (!pty) {
       console.error('Cannot create terminal: node-pty not available');
@@ -137,24 +138,28 @@ export class TerminalService extends EventEmitter {
       this.terminals.delete(terminalId);
     });
 
-    // If copilot path provided, start copilot
-    if (copilotPath) {
-      setTimeout(() => {
-        // Build the base command: either `& "copilot.exe"` or `& "gh.exe" copilot`
-        const isGh = copilotCommand === 'gh copilot';
-        const baseCmd = isGh ? `& "${copilotPath}" copilot` : `& "${copilotPath}"`;
-        
-        let command: string;
-        if (copilotSessionId) {
-          command = `${baseCmd} --resume "${copilotSessionId}"\r`;
-        } else if (mission) {
-          command = `${baseCmd} -i "${mission!.replace(/"/g, '\\"')}"\r`;
-        } else {
-          command = `${baseCmd}\r`;
-        }
-        ptyProcess.write(command);
-      }, 500);
-    }
+    // Start copilot unless explicitly skipped (blank terminal)
+    if (skipCopilot) return terminalId;
+    setTimeout(() => {
+      const isGh = copilotCommand === 'gh copilot';
+      let baseCmd: string;
+      if (copilotPath) {
+        baseCmd = isGh ? `& "${copilotPath}" copilot` : `& "${copilotPath}"`;
+      } else {
+        // Fallback: rely on copilot being in the shell's PATH
+        baseCmd = isGh ? 'gh copilot' : 'copilot';
+      }
+
+      let command: string;
+      if (copilotSessionId) {
+        command = `${baseCmd} --resume "${copilotSessionId}"\r`;
+      } else if (mission) {
+        command = `${baseCmd} -i "${mission!.replace(/"/g, '\\"')}"\r`;
+      } else {
+        command = `${baseCmd}\r`;
+      }
+      ptyProcess.write(command);
+    }, 500);
 
     return terminalId;
   }

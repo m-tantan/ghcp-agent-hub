@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Embedded Terminal
   terminalCreate: (terminalId: string, cwd: string, sessionId?: string, mission?: string) =>
     ipcRenderer.invoke('terminal-create', terminalId, cwd, sessionId, mission),
+  terminalCreateBlank: (terminalId: string, cwd: string) =>
+    ipcRenderer.invoke('terminal-create-blank', terminalId, cwd),
+  getHomeDir: () => ipcRenderer.invoke('get-home-dir'),
   terminalWrite: (terminalId: string, data: string) =>
     ipcRenderer.invoke('terminal-write', terminalId, data),
   terminalResize: (terminalId: string, cols: number, rows: number) =>

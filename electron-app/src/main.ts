@@ -381,6 +381,16 @@ function setupIPC(): void {
     return terminalService.createTerminal(terminalId, cwd, copilotPath, sessionId, mission, copilotCommand);
   });
 
+  // Get user home directory
+  ipcMain.handle('get-home-dir', () => {
+    return process.env.USERPROFILE || process.env.HOME || '';
+  });
+
+  // Create blank terminal (no Copilot)
+  ipcMain.handle('terminal-create-blank', async (_event, terminalId: string, cwd: string) => {
+    return terminalService.createTerminal(terminalId, cwd, undefined, undefined, undefined, undefined, true);
+  });
+
   // Write to terminal
   ipcMain.handle('terminal-write', (_event, terminalId: string, data: string) => {
     terminalService.writeToTerminal(terminalId, data);
@@ -515,7 +525,7 @@ async function findCopilotExecutable(): Promise<CLIExecutableResult | null> {
   try {
     const cmd = process.platform === 'win32' ? 'where copilot' : 'which copilot';
     const { stdout } = await execAsync(cmd);
-    const found = stdout.trim().split('\n')[0];
+    const found = stdout.trim().split('\n')[0].trim();
     if (found && fs.existsSync(found)) return { path: found, command: 'copilot' };
   } catch {
     // Not found
@@ -544,7 +554,7 @@ async function findCopilotExecutable(): Promise<CLIExecutableResult | null> {
   try {
     const cmd = process.platform === 'win32' ? 'where gh' : 'which gh';
     const { stdout } = await execAsync(cmd);
-    const found = stdout.trim().split('\n')[0];
+    const found = stdout.trim().split('\n')[0].trim();
     if (found && fs.existsSync(found)) return { path: found, command: 'gh copilot' };
   } catch {
     // Not found
@@ -592,6 +602,8 @@ function setupAutoUpdater(): void {
 }
 
 app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null);
+
   // Initialize services
   configService = new ConfigService();
   monitorService = new CLISessionMonitorService();

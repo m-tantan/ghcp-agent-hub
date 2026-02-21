@@ -21,6 +21,7 @@ import { parseSessionFile } from './SessionEventsParser';
 import { ConfigService, PersistedRepository } from './ConfigService';
 
 const execAsync = promisify(exec);
+const fsPromises = fs.promises;
 
 /**
  * CLI Session Monitor Service
@@ -171,7 +172,7 @@ export class CLISessionMonitorService extends EventEmitter {
   }
 
   /**
-   * Scan all sessions from session-state directory
+   * Scan all sessions from session-state directory (async I/O)
    */
   async scanAllSessions(): Promise<CLISession[]> {
     const sessionStatePath = this.getSessionStatePath();
@@ -183,11 +184,11 @@ export class CLISessionMonitorService extends EventEmitter {
     const sessions: CLISession[] = [];
 
     try {
-      const sessionDirs = fs.readdirSync(sessionStatePath);
+      const sessionDirs = await fsPromises.readdir(sessionStatePath);
 
-      for (const sessionId of sessionDirs) {
+      await Promise.all(sessionDirs.map(async (sessionId) => {
         // Skip non-UUID directories
-        if (!this.isValidUUID(sessionId)) continue;
+        if (!this.isValidUUID(sessionId)) return;
 
         const sessionDir = path.join(sessionStatePath, sessionId);
         const workspaceFile = path.join(sessionDir, 'workspace.yaml');
@@ -195,19 +196,19 @@ export class CLISessionMonitorService extends EventEmitter {
 
         // Read workspace metadata
         const metadata = this.readWorkspaceMetadata(workspaceFile);
-        if (!metadata) continue;
+        if (!metadata) return;
 
-        // Check if active
+        // Check if active (async stat)
         let isActive = false;
         try {
-          const stats = fs.statSync(eventsFile);
+          const stats = await fsPromises.stat(eventsFile);
           const secondsAgo = (Date.now() - stats.mtime.getTime()) / 1000;
           isActive = secondsAgo < 60;
         } catch {
           // File doesn't exist or can't be read
         }
 
-        // Parse events for message count and activities
+        // parseSessionFile uses its own incremental cache — cheap when file unchanged
         const parseResult = parseSessionFile(eventsFile);
 
         // Find first/last user message
@@ -215,10 +216,8 @@ export class CLISessionMonitorService extends EventEmitter {
           a => a.activityType.type === 'userMessage'
         );
         const firstMessage = userMessages[0]?.description;
-        const lastMessage = userMessages[userMessages.length - 1]?.description;
 
         // Parse timestamps
-        const createdAt = metadata.createdAt ? new Date(metadata.createdAt) : undefined;
         const updatedAt = metadata.updatedAt ? new Date(metadata.updatedAt) : undefined;
 
         const session: CLISession = {
@@ -230,12 +229,12 @@ export class CLISessionMonitorService extends EventEmitter {
           messageCount: parseResult.messageCount,
           isActive,
           firstMessage,
-          lastMessage,
+          lastMessage: undefined,
           summary: metadata.summary,
         };
 
         sessions.push(session);
-      }
+      }));
     } catch (err) {
       console.error('Error scanning sessions:', err);
     }
