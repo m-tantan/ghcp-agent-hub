@@ -108,6 +108,9 @@ main { flex: 1; overflow: auto; padding: 24px; }
 /* Terminal Panel */
 .terminal-panel { display: none; flex-direction: column; overflow: hidden; flex: 1; min-height: 0; }
 .terminal-panel.open { display: flex; }
+/* Panel-minimized: keep the header bar visible but hide the terminal content */
+.terminal-panel.open.panel-minimized { flex: 0 0 auto; }
+.terminal-panel.open.panel-minimized .terminal-container { display: none; }
 .terminal-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background: #161b22; border-bottom: 1px solid #30363d; flex-shrink: 0; }
 .terminal-actions { display: flex; gap: 8px; align-items: center; }
 .terminal-actions button { padding: 4px 8px; font-size: 11px; }
@@ -243,9 +246,8 @@ main { flex: 1; overflow: auto; padding: 24px; }
 .main-content.terminal-only-mode > .content-splitter { display: none !important; }
 /* In terminal-only mode, allow the minimized bar to show (via .show) so the
    user can restore the terminal panel — pin it to the bottom of the flex column */
-.main-content.terminal-only-mode > .terminal-panel-minimized { display: none; }
-.main-content.terminal-only-mode > .terminal-panel-minimized.show { display: flex; margin-top: auto; }
 .main-content.terminal-only-mode > .terminal-panel { flex: 1 !important; }
+.main-content.terminal-only-mode > .terminal-panel.panel-minimized { flex: 0 0 auto !important; }
 .terminal-only-toggle { background: none; border: 1px solid #30363d; color: #8b949e; cursor: pointer; padding: 3px 8px; font-size: 11px; border-radius: 4px; }
 .terminal-only-toggle:hover { color: #e94560; border-color: #e94560; background: none; }
 .terminal-only-toggle.active { color: #e94560; border-color: #e94560; }

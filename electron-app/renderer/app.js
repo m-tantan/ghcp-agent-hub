@@ -145,7 +145,11 @@ async function init() {
   // Terminal panel events
   document.getElementById('newTerminalBtn').addEventListener('click', () => showNewTerminalDialog());
   document.getElementById('closeTerminalPanelBtn').addEventListener('click', toggleTerminalPanel);
-  document.getElementById('minimizeTerminalPanelBtn').addEventListener('click', minimizeTerminalPanel);
+  document.getElementById('minimizeTerminalPanelBtn').addEventListener('click', () => {
+    const panel = document.getElementById('terminalPanel');
+    if (panel.classList.contains('panel-minimized')) restoreTerminalPanel();
+    else minimizeTerminalPanel();
+  });
   document.getElementById('terminalPanelMinimized').addEventListener('click', restoreTerminalPanel);
   document.getElementById('terminalsPerRow').addEventListener('change', e => {
     terminalsPerRow = parseInt(e.target.value) || 2;
@@ -579,9 +583,8 @@ function showTerminalPanel() {
   const panel = document.getElementById('terminalPanel');
   const main = document.getElementById('content');
   const splitter = document.getElementById('contentSplitter');
-  const minBar = document.getElementById('terminalPanelMinimized');
   panel.classList.add('open');
-  minBar.classList.remove('show');
+  panel.classList.remove('panel-minimized');
   splitter.style.display = 'block';
   // Split space: sessions get 40%, terminals 60%
   main.style.flex = '0 0 40%';
@@ -593,27 +596,33 @@ function showTerminalPanel() {
 function hideTerminalPanel() {
   const panel = document.getElementById('terminalPanel');
   const splitter = document.getElementById('contentSplitter');
-  const minBar = document.getElementById('terminalPanelMinimized');
   panel.classList.remove('open');
+  panel.classList.remove('panel-minimized');
   splitter.style.display = 'none';
-  minBar.classList.remove('show');
   document.getElementById('content').style.flex = '';
 }
 
 function minimizeTerminalPanel() {
   const panel = document.getElementById('terminalPanel');
   const splitter = document.getElementById('contentSplitter');
-  const minBar = document.getElementById('terminalPanelMinimized');
-  panel.classList.remove('open');
+  panel.classList.add('panel-minimized');
   splitter.style.display = 'none';
-  minBar.classList.add('show');
   document.getElementById('content').style.flex = '';
   const count = terminals.size;
   document.getElementById('terminalCountMin').textContent = count > 0 ? `(${count} open)` : '';
 }
 
 function restoreTerminalPanel() {
-  showTerminalPanel();
+  const panel = document.getElementById('terminalPanel');
+  panel.classList.remove('panel-minimized');
+  // If not in terminal-only mode, restore the splitter and session flex
+  if (!terminalOnlyMode) {
+    document.getElementById('contentSplitter').style.display = 'block';
+    document.getElementById('content').style.flex = '0 0 40%';
+    panel.style.flex = '1 1 60%';
+  }
+  updateTerminalGrid();
+  setTimeout(() => terminals.forEach(t => t.fitAddon.fit()), 100);
 }
 
 function initSplitter() {
