@@ -788,9 +788,19 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
   term.onData(data => api.terminalWrite(termId, data));
   term.onResize(({ cols, rows }) => api.terminalResize(termId, cols, rows));
   
+  // Copy via Ctrl+C — copy selection if present, otherwise send interrupt
   // Paste via Ctrl+V — check for image first, then text
   term.attachCustomKeyEventHandler(e => {
+    if (e.type === 'keydown' && e.ctrlKey && e.key === 'c') {
+      if (term.hasSelection()) {
+        navigator.clipboard.writeText(term.getSelection());
+        term.clearSelection();
+        return false;
+      }
+      return true; // No selection — send interrupt (\x03) to terminal
+    }
     if (e.type === 'keydown' && e.ctrlKey && e.key === 'v') {
+      e.preventDefault(); // Prevent browser native paste (which would cause double paste)
       (async () => {
         // Try clipboard image first
         const imgPath = await api.saveClipboardImage();
