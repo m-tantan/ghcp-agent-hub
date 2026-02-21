@@ -225,7 +225,7 @@ async function init() {
   resizeObserver.observe(document.querySelector('.app'));
 }
 
-
+function updateFilterButtons() {
   document.querySelectorAll('.filter-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.filter === currentFilter);
   });
