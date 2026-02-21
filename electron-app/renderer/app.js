@@ -133,6 +133,7 @@ async function init() {
   document.getElementById('closeActivityBtn').addEventListener('click', closeActivityPanel);
   document.getElementById('sidebarCollapseBtn').addEventListener('click', collapseSidebar);
   document.getElementById('sidebarToggle').addEventListener('click', expandSidebar);
+  document.getElementById('sidebarToggleHeader').addEventListener('click', expandSidebar);
   document.getElementById('cancelWorktreeBtn').addEventListener('click', () => document.getElementById('worktreeModal').classList.remove('show'));
   document.getElementById('createWorktreeBtn').addEventListener('click', createWorktree);
   document.getElementById('cancelRenameBtn').addEventListener('click', () => document.getElementById('renameModal').classList.remove('show'));
@@ -572,11 +573,13 @@ async function focusTerminal(sessionId, workingDir) {
 function collapseSidebar() {
   document.getElementById('sidebar').classList.add('collapsed');
   document.getElementById('sidebarToggle').classList.remove('hidden');
+  document.getElementById('sidebarToggleHeader').classList.remove('hidden');
 }
 
 function expandSidebar() {
   document.getElementById('sidebar').classList.remove('collapsed');
   document.getElementById('sidebarToggle').classList.add('hidden');
+  document.getElementById('sidebarToggleHeader').classList.add('hidden');
 }
 
 // === Embedded Terminal Functions (Grid View) ===
