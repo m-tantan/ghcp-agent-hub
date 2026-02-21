@@ -244,8 +244,8 @@ function renderSidebar() {
       <div class="repo-header ${r.isExpanded?'expanded':''}" onclick="toggleRepo('${escJs(r.path)}')">
         <span class="chevron">▶</span><span class="repo-name">📁 ${esc(repoName)}</span>
         <div class="repo-actions" onclick="event.stopPropagation()">
-          <button onclick="showCreateWorktree('${escJs(r.path)}')" title="New Worktree">🌿</button>
-          <button onclick="removeRepo('${escJs(r.path)}')" title="Remove">✕</button>
+          <button onclick="showCreateWorktree('${escJs(r.path)}')" title="New Worktree" aria-label="New Worktree">🌿</button>
+          ${repositories.length > 1 ? `<button onclick="removeRepo('${escJs(r.path)}')" title="Remove Repository" aria-label="Remove Repository">✕</button>` : ''}
         </div>
       </div>
       ${r.isExpanded ? `<div class="worktree-list">${r.worktrees.map((w, wi) => {
@@ -256,9 +256,9 @@ function renderSidebar() {
           <div class="worktree-header"><span>${w.isWorktree?'🌿':'📂'}</span><span class="worktree-branch">${esc(w.name)}</span><span style="color:#888;font-size:10px">(${w.sessions.length})</span></div>
           <div class="worktree-path">${esc(w.path)}</div>
           <div class="worktree-actions">
-            <button onclick="openTerm('${escJs(w.path)}')">▶ New</button>
-            <button onclick="api.openFolder('${escJs(w.path)}')">📂</button>
-            ${w.isWorktree?`<button onclick="delWorktree('${escJs(r.path)}','${escJs(w.path)}')" style="color:#e94560">🗑</button>`:''}
+            <button onclick="openTerm('${escJs(w.path)}')" title="New Session" aria-label="New Session">▶ New</button>
+            <button onclick="api.openFolder('${escJs(w.path)}')" title="Open Folder" aria-label="Open Folder">📂</button>
+            ${w.isWorktree?`<button onclick="delWorktree('${escJs(r.path)}','${escJs(w.path)}')" title="Delete Worktree" aria-label="Delete Worktree" style="color:#e94560">🗑</button>`:''}
           </div>
         </div>`}).join('')}</div>` : ''}
     </div>`;

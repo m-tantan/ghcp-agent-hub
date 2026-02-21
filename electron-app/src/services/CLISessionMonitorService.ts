@@ -149,6 +149,13 @@ export class CLISessionMonitorService extends EventEmitter {
   async refreshSessions(): Promise<void> {
     const allSessions = await this.scanAllSessions();
 
+    // Re-detect worktrees for each repository so new ones appear
+    for (let repoIdx = 0; repoIdx < this.selectedRepositories.length; repoIdx++) {
+      const repo = this.selectedRepositories[repoIdx];
+      const updatedWorktrees = await this.detectWorktrees(repo.path);
+      this.selectedRepositories[repoIdx].worktrees = updatedWorktrees;
+    }
+
     // Filter sessions by selected repositories
     for (let repoIdx = 0; repoIdx < this.selectedRepositories.length; repoIdx++) {
       const repo = this.selectedRepositories[repoIdx];
