@@ -261,29 +261,14 @@ export class CLISessionMonitorService extends EventEmitter {
       const worktrees: WorktreeBranch[] = [];
       let currentPath: string | undefined;
       let currentBranch: string | undefined;
+      let isFirst = true;
 
-      for (const line of stdout.split('\n')) {
-        if (line.startsWith('worktree ')) {
-          currentPath = line.substring('worktree '.length);
-        } else if (line.startsWith('branch refs/heads/')) {
-          currentBranch = line.substring('branch refs/heads/'.length);
-        } else if (line === '' && currentPath) {
-          const isMainWorktree = currentPath === repoPath;
-          worktrees.push({
-            name: currentBranch ?? path.basename(currentPath),
-            path: currentPath,
-            isWorktree: !isMainWorktree,
-            sessions: [],
-            isExpanded: true,
-          });
-          currentPath = undefined;
-          currentBranch = undefined;
-        }
-      }
-
-      // Handle last entry
-      if (currentPath) {
-        const isMainWorktree = currentPath === repoPath;
+      const pushEntry = () => {
+        if (!currentPath) return;
+        // First entry from `git worktree list` is always the main worktree
+        const isMainWorktree = isFirst ||
+          currentPath.toLowerCase() === repoPath.toLowerCase();
+        isFirst = false;
         worktrees.push({
           name: currentBranch ?? path.basename(currentPath),
           path: currentPath,
@@ -291,7 +276,22 @@ export class CLISessionMonitorService extends EventEmitter {
           sessions: [],
           isExpanded: true,
         });
+        currentPath = undefined;
+        currentBranch = undefined;
+      };
+
+      for (const line of stdout.split('\n')) {
+        if (line.startsWith('worktree ')) {
+          currentPath = line.substring('worktree '.length);
+        } else if (line.startsWith('branch refs/heads/')) {
+          currentBranch = line.substring('branch refs/heads/'.length);
+        } else if (line === '' && currentPath) {
+          pushEntry();
+        }
       }
+
+      // Handle last entry
+      pushEntry();
 
       if (worktrees.length === 0) {
         // No worktrees, use main repo
