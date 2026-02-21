@@ -207,9 +207,25 @@ async function init() {
       api.setSavedTerminals([]);
     }
   }
+  // Responsive sidebar: auto-collapse below 650px window width
+  const SIDEBAR_BREAKPOINT = 650;
+  let sidebarAutoCollapsed = false;
+  const resizeObserver = new ResizeObserver(entries => {
+    const width = entries[0].contentRect.width;
+    const sidebar = document.getElementById('sidebar');
+    const isCollapsed = sidebar.classList.contains('collapsed');
+    if (width < SIDEBAR_BREAKPOINT && !isCollapsed) {
+      collapseSidebar();
+      sidebarAutoCollapsed = true;
+    } else if (width >= SIDEBAR_BREAKPOINT && isCollapsed && sidebarAutoCollapsed) {
+      expandSidebar();
+      sidebarAutoCollapsed = false;
+    }
+  });
+  resizeObserver.observe(document.querySelector('.app'));
 }
 
-function updateFilterButtons() {
+
   document.querySelectorAll('.filter-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.filter === currentFilter);
   });

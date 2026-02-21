@@ -10,7 +10,6 @@
 </head>
 <body>
   <div class="app">
-    <button class="sidebar-toggle hidden" id="sidebarToggle" title="Show sidebar">☰</button>
     <div class="sidebar" id="sidebar">
       <div class="sidebar-header"><h1>🤖 GHCP Agent Hub</h1><button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Collapse sidebar">◀</button></div>
       <div class="sidebar-actions">
@@ -54,7 +53,8 @@
       <!-- Terminal Panel - inline in main content area -->
       <div class="terminal-panel" id="terminalPanel">
         <div class="terminal-header">
-          <div style="display:flex;align-items:center;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button class="sidebar-toggle hidden" id="sidebarToggle" title="Show sidebar">☰</button>
             <span class="terminal-title">📺 Terminals</span>
             <span class="terminal-count" id="terminalCount"></span>
           </div>
