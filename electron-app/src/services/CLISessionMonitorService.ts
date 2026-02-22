@@ -181,6 +181,81 @@ export class CLISessionMonitorService extends EventEmitter {
   /**
    * Scan all sessions from session-state directory (async I/O)
    */
+  /**
+   * Scan all sessions and return activity stats data for each.
+   * Used to rebuild GlobalStatsService on demand.
+   */
+  async scanAllSessionStats(fromDate?: Date, toDate?: Date): Promise<Array<{
+    id: string;
+    messageCount: number;
+    toolCalls: Record<string, number>;
+    totalToolCallCount: number;
+    cwd?: string;
+    summary?: string;
+    startedAt?: Date;
+    lastActivityAt?: Date;
+    durationMs?: number;
+  }>> {
+    const sessionStatePath = this.getSessionStatePath();
+    if (!fs.existsSync(sessionStatePath)) return [];
+
+    const results: Array<{
+      id: string;
+      messageCount: number;
+      toolCalls: Record<string, number>;
+      totalToolCallCount: number;
+      cwd?: string;
+      summary?: string;
+      startedAt?: Date;
+      lastActivityAt?: Date;
+      durationMs?: number;
+    }> = [];
+
+    try {
+      const sessionDirs = await fsPromises.readdir(sessionStatePath);
+      await Promise.all(sessionDirs.map(async (sessionId) => {
+        if (!this.isValidUUID(sessionId)) return;
+        const sessionDir = path.join(sessionStatePath, sessionId);
+        const eventsFile = path.join(sessionDir, 'events.jsonl');
+        const workspaceFile = path.join(sessionDir, 'workspace.yaml');
+
+        const metadata = this.readWorkspaceMetadata(workspaceFile);
+        const parseResult = parseSessionFile(eventsFile);
+
+        const lastActivityAt = metadata?.updatedAt ? new Date(metadata.updatedAt) : parseResult.lastActivityAt;
+        const startedAt = parseResult.sessionStartedAt ??
+          (metadata?.createdAt ? new Date(metadata.createdAt) : undefined);
+
+        // Apply date range filter
+        if (lastActivityAt) {
+          if (fromDate && lastActivityAt < fromDate) return;
+          if (toDate && lastActivityAt > toDate) return;
+        }
+
+        const totalToolCallCount = Object.values(parseResult.toolCalls).reduce((a, b) => a + b, 0);
+        const durationMs = startedAt && lastActivityAt
+          ? lastActivityAt.getTime() - startedAt.getTime()
+          : undefined;
+
+        results.push({
+          id: sessionId,
+          messageCount: parseResult.messageCount,
+          toolCalls: parseResult.toolCalls,
+          totalToolCallCount,
+          cwd: metadata?.cwd,
+          summary: metadata?.summary,
+          startedAt,
+          lastActivityAt,
+          durationMs: durationMs && durationMs > 0 ? durationMs : undefined,
+        });
+      }));
+    } catch (err) {
+      console.error('Error scanning session stats:', err);
+    }
+
+    return results;
+  }
+
   async scanAllSessions(): Promise<CLISession[]> {
     const sessionStatePath = this.getSessionStatePath();
 

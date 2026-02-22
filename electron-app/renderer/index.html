@@ -31,11 +31,16 @@
             <span class="filter-label">Filter:</span>
             <button class="filter-btn active" data-filter="all" title="Show all sessions">All</button>
             <button class="filter-btn" data-filter="active" title="Show only active/running sessions">🟢 Active</button>
-            <button class="filter-btn" data-filter="intervention" title="Show sessions awaiting user input">⚠️ Needs Input</button>
           </div>
         </div>
         <input type="text" id="searchInput" placeholder="Search sessions...">
-        <button id="statsBtn" style="margin-left:8px" title="Token Stats">📊 Stats</button>
+        <div class="date-range-filter">
+          <input type="date" id="dateFrom" title="From date">
+          <span class="date-sep">→</span>
+          <input type="date" id="dateTo" title="To date">
+          <button id="clearDateRangeBtn" title="Clear date filter">✕</button>
+        </div>
+        <button id="statsBtn" style="margin-left:8px" title="Activity Stats">📊 Stats</button>
         <div class="view-toggle">
           <button id="viewTileBtn" class="active" title="Tile view" onclick="setSessionViewMode('tile')">⊞</button>
           <button id="viewListBtn" title="List view" onclick="setSessionViewMode('list')">☰</button>
@@ -85,7 +90,7 @@
     </div>
     <!-- Stats Panel -->
     <div class="stats-panel" id="statsPanel">
-      <h2>📊 Token Stats <button class="close-btn" id="closeStatsBtn">✕</button></h2>
+      <h2>📊 Activity Stats <button class="close-btn" id="closeStatsBtn">✕</button></h2>
       <div id="statsContent"></div>
     </div>
     <!-- Diff Panel -->
@@ -121,7 +126,7 @@
       <div class="terminal-search-box" style="width:420px;">
         <h3 style="margin:0 0 12px;color:#e94560;font-size:16px;">⌨️ Keyboard Shortcuts</h3>
         <table class="shortcuts-table">
-          <tr><td class="shortcut-key">F1 / ?</td><td>Show this help</td></tr>
+          <tr><td class="shortcut-key">F1</td><td>Show this help</td></tr>
           <tr><td class="shortcut-key">F2</td><td>Rename / memo active terminal</td></tr>
           <tr><td class="shortcut-key">Ctrl + N</td><td>New blank terminal (no Copilot)</td></tr>
           <tr><td class="shortcut-key">Ctrl + F</td><td>Search terminals</td></tr>
@@ -129,7 +134,7 @@
           <tr><td class="shortcut-key">Ctrl + V</td><td>Paste (text or image)</td></tr>
           <tr><td class="shortcut-key">Ctrl + Shift + E</td><td>Open folder in Explorer</td></tr>
         </table>
-        <div class="search-hint" style="margin-top:12px;">Press Esc or ? to close</div>
+        <div class="search-hint" style="margin-top:12px;">Press Esc to close</div>
       </div>
     </div>
     <div class="modal-overlay" id="worktreeModal">

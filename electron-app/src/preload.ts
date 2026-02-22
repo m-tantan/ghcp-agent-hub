@@ -85,7 +85,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDiff: (cwd: string, mode: string, baseBranch?: string) => ipcRenderer.invoke('get-diff', cwd, mode, baseBranch),
 
   // Global Stats
-  getGlobalStats: () => ipcRenderer.invoke('get-global-stats'),
+  getGlobalStats: (fromMs?: number, toMs?: number) => ipcRenderer.invoke('get-global-stats', fromMs, toMs),
 
   // Global Search
   deepSearch: (query: string) => ipcRenderer.invoke('deep-search', query),

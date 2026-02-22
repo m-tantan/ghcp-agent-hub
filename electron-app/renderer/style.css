@@ -105,6 +105,12 @@ main { flex: 1; overflow: auto; padding: 24px; }
 .spinner { width: 32px; height: 32px; border: 3px solid #0f3460; border-top-color: #e94560; border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 #searchInput { padding: 8px 12px; background: #1a1a2e; border: 1px solid #0f3460; border-radius: 6px; color: #eee; width: 200px; }
+.date-range-filter { display: flex; align-items: center; gap: 4px; margin-left: 8px; }
+.date-range-filter input[type="date"] { padding: 6px 8px; background: #1a1a2e; border: 1px solid #0f3460; border-radius: 6px; color: #eee; font-size: 12px; width: 120px; cursor: pointer; color-scheme: dark; }
+.date-range-filter input[type="date"]:focus { outline: none; border-color: #e94560; }
+.date-sep { color: #555; font-size: 12px; }
+.date-range-filter button { background: none; border: none; color: #555; cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 4px; }
+.date-range-filter button:hover { color: #e94560; background: rgba(233,69,96,0.1); }
 /* Terminal Panel */
 .terminal-panel { display: none; flex-direction: column; overflow: hidden; flex: 1; min-height: 0; }
 .terminal-panel.open { display: flex; }
@@ -187,7 +193,10 @@ main { flex: 1; overflow: auto; padding: 24px; }
 .stats-card { background: #1a1a2e; border-radius: 8px; padding: 14px; text-align: center; }
 .stats-card .value { font-size: 22px; font-weight: bold; color: #e94560; }
 .stats-card .label { font-size: 11px; color: #888; margin-top: 4px; }
-.model-row { display: flex; justify-content: space-between; padding: 8px 12px; background: #1a1a2e; border-radius: 6px; margin-bottom: 6px; font-size: 12px; }
+.stats-section-title { font-size: 13px; color: #ccc; margin: 16px 0 8px; }
+.stats-bar-bg { height: 4px; background: #0f3460; border-radius: 2px; overflow: hidden; }
+.stats-bar-fill { height: 100%; background: #e94560; border-radius: 2px; transition: width 0.3s; }
+.model-row { background: #1a1a2e; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; font-size: 12px; }
 .model-name { color: #4ade80; font-family: monospace; }
 .model-tokens { color: #888; }
 .model-cost { color: #e94560; }

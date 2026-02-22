@@ -1,76 +1,63 @@
 /**
  * GlobalStatsService
  * 
- * Aggregates token usage and cost statistics across all monitored sessions.
- * Windows equivalent of macOS GlobalStatsService.
+ * Aggregates activity statistics across all monitored sessions.
+ * Token data is not available in Copilot CLI event files; stats focus on
+ * messages, tool usage, and session activity.
  */
 
 import { SessionMonitorState } from '../models/types';
 
 export interface SessionStats {
   sessionId: string;
-  inputTokens: number;
-  outputTokens: number;
-  totalOutputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
-  model?: string;
   messageCount: number;
+  toolCalls: Record<string, number>;
+  totalToolCallCount: number;
+  cwd?: string;
+  summary?: string;
+  startedAt?: Date;
+  lastActivityAt?: Date;
+  durationMs?: number;
 }
 
 export interface GlobalStats {
+  sessionCount: number;
+  totalMessages: number;
+  totalToolCalls: number;
+  avgMessagesPerSession: number;
+  avgDurationMs: number;
+  toolBreakdown: Record<string, number>;
+  repoBreakdown: Record<string, { sessionCount: number; messageCount: number }>;
+  perSession: SessionStats[];
+  // Legacy fields kept at 0 for tray menu compat
   totalInputTokens: number;
   totalOutputTokens: number;
+  estimatedCostUsd: number;
+  activeSessionCount: number;
   totalCacheReadTokens: number;
   totalCacheCreationTokens: number;
-  estimatedCostUsd: number;
-  sessionCount: number;
-  activeSessionCount: number;
-  totalMessages: number;
-  perSession: SessionStats[];
-  modelBreakdown: Record<string, { inputTokens: number; outputTokens: number; cost: number }>;
-}
-
-// Approximate pricing per million tokens (Sonnet-class defaults)
-const PRICING: Record<string, { input: number; output: number }> = {
-  'default':  { input: 3.0, output: 15.0 },
-  'sonnet':   { input: 3.0, output: 15.0 },
-  'opus':     { input: 15.0, output: 75.0 },
-  'haiku':    { input: 0.25, output: 1.25 },
-  'gpt-4':    { input: 10.0, output: 30.0 },
-  'gpt-4o':   { input: 2.5, output: 10.0 },
-};
-
-function getPricing(model?: string): { input: number; output: number } {
-  if (!model) return PRICING['default'];
-  const lower = model.toLowerCase();
-  for (const [key, pricing] of Object.entries(PRICING)) {
-    if (lower.includes(key)) return pricing;
-  }
-  return PRICING['default'];
-}
-
-function estimateCost(inputTokens: number, outputTokens: number, model?: string): number {
-  const pricing = getPricing(model);
-  return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
 }
 
 export class GlobalStatsService {
   private sessionStats: Map<string, SessionStats> = new Map();
 
   /**
-   * Update stats for a session from its monitor state
+   * Update stats for a session from its monitor state (live watcher updates)
    */
   updateSession(sessionId: string, state: SessionMonitorState): void {
+    const existing = this.sessionStats.get(sessionId);
     this.sessionStats.set(sessionId, {
       sessionId,
-      inputTokens: state.inputTokens,
-      outputTokens: state.outputTokens,
-      totalOutputTokens: state.totalOutputTokens,
-      cacheReadTokens: state.cacheReadTokens,
-      cacheCreationTokens: state.cacheCreationTokens,
-      model: state.model,
       messageCount: state.messageCount,
+      toolCalls: state.toolCalls ?? {},
+      totalToolCallCount: Object.values(state.toolCalls ?? {}).reduce((a, b) => a + b, 0),
+      cwd: existing?.cwd,
+      summary: existing?.summary,
+      startedAt: state.sessionStartedAt ?? existing?.startedAt,
+      lastActivityAt: state.lastActivityAt,
+      durationMs: state.sessionStartedAt && state.lastActivityAt
+        ? state.lastActivityAt.getTime() - state.sessionStartedAt.getTime()
+        : existing?.durationMs,
     });
   }
 
@@ -82,45 +69,69 @@ export class GlobalStatsService {
   }
 
   /**
+   * Clear all tracked sessions (used before a full rescan)
+   */
+  clearAll(): void {
+    this.sessionStats.clear();
+  }
+
+  /**
+   * Set stats for a session directly from scan data
+   */
+  setSessionStats(sessionId: string, data: Omit<SessionStats, 'sessionId'>): void {
+    this.sessionStats.set(sessionId, { sessionId, ...data });
+  }
+
+  /**
    * Get aggregated global stats
    */
-  getGlobalStats(activeSessionIds?: Set<string>): GlobalStats {
-    let totalInput = 0, totalOutput = 0, totalCacheRead = 0, totalCacheCreation = 0;
-    let totalMessages = 0, activeCount = 0;
-    const modelBreakdown: GlobalStats['modelBreakdown'] = {};
+  getGlobalStats(): GlobalStats {
+    let totalMessages = 0, totalToolCalls = 0, totalDurationMs = 0, sessionWithDuration = 0;
+    const toolBreakdown: Record<string, number> = {};
+    const repoBreakdown: Record<string, { sessionCount: number; messageCount: number }> = {};
     const perSession: SessionStats[] = [];
 
-    for (const [id, stats] of this.sessionStats) {
-      totalInput += stats.inputTokens;
-      totalOutput += stats.totalOutputTokens;
-      totalCacheRead += stats.cacheReadTokens;
-      totalCacheCreation += stats.cacheCreationTokens;
+    for (const [, stats] of this.sessionStats) {
       totalMessages += stats.messageCount;
+      totalToolCalls += stats.totalToolCallCount;
       perSession.push(stats);
 
-      if (activeSessionIds?.has(id)) activeCount++;
-
-      // Model breakdown
-      const modelKey = stats.model || 'unknown';
-      if (!modelBreakdown[modelKey]) {
-        modelBreakdown[modelKey] = { inputTokens: 0, outputTokens: 0, cost: 0 };
+      if (stats.durationMs && stats.durationMs > 0) {
+        totalDurationMs += stats.durationMs;
+        sessionWithDuration++;
       }
-      modelBreakdown[modelKey].inputTokens += stats.inputTokens;
-      modelBreakdown[modelKey].outputTokens += stats.totalOutputTokens;
-      modelBreakdown[modelKey].cost += estimateCost(stats.inputTokens, stats.totalOutputTokens, stats.model);
+
+      // Tool breakdown
+      for (const [tool, count] of Object.entries(stats.toolCalls)) {
+        toolBreakdown[tool] = (toolBreakdown[tool] ?? 0) + count;
+      }
+
+      // Repo breakdown (use last path segment of cwd as repo name)
+      if (stats.cwd) {
+        const repo = stats.cwd.split(/[/\\]/).pop() ?? stats.cwd;
+        if (!repoBreakdown[repo]) repoBreakdown[repo] = { sessionCount: 0, messageCount: 0 };
+        repoBreakdown[repo].sessionCount++;
+        repoBreakdown[repo].messageCount += stats.messageCount;
+      }
     }
 
+    const count = this.sessionStats.size;
     return {
-      totalInputTokens: totalInput,
-      totalOutputTokens: totalOutput,
-      totalCacheReadTokens: totalCacheRead,
-      totalCacheCreationTokens: totalCacheCreation,
-      estimatedCostUsd: estimateCost(totalInput, totalOutput),
-      sessionCount: this.sessionStats.size,
-      activeSessionCount: activeCount,
+      sessionCount: count,
       totalMessages,
+      totalToolCalls,
+      avgMessagesPerSession: count > 0 ? Math.round(totalMessages / count) : 0,
+      avgDurationMs: sessionWithDuration > 0 ? Math.round(totalDurationMs / sessionWithDuration) : 0,
+      toolBreakdown,
+      repoBreakdown,
       perSession,
-      modelBreakdown,
+      // Legacy zero fields
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      estimatedCostUsd: 0,
+      activeSessionCount: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
     };
   }
 

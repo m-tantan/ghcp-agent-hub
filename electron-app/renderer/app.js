@@ -1,9 +1,21 @@
 const api = window.electronAPI;
 let sessions = [], repositories = [], selectedSessionId = null, currentRepoForWorktree = null, searchQuery = '';
-let currentFilter = 'all'; // 'all', 'active', 'intervention'
+let currentFilter = 'all'; // 'all', 'active'
 let sessionStates = new Map(); // Track real-time session states for filtering
 let sessionNames = {}; // Track custom session names
 let currentEditSessionId = null; // Session being renamed
+
+// Date range filter state (default: last 7 days)
+let dateFrom = null;
+let dateTo = null;
+function initDefaultDateRange() {
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(from.getDate() - 7);
+  dateFrom = from;
+  dateTo = to;
+}
+initDefaultDateRange();
 
 // Terminal state
 let terminals = new Map(); // terminalId -> { term, fitAddon }
@@ -81,8 +93,9 @@ async function init() {
     console.log('Embedded terminal not available - will use external terminals');
   }
   
-  // Load saved filter first
+  // Load saved filter first (sanitize legacy 'intervention' value)
   currentFilter = await api.getFilter() || 'all';
+  if (currentFilter === 'intervention') currentFilter = 'all';
   updateFilterButtons();
   
   // Load session names
@@ -167,6 +180,36 @@ async function init() {
   });
   document.getElementById('statsBtn').addEventListener('click', toggleStatsPanel);
   document.getElementById('closeStatsBtn').addEventListener('click', () => document.getElementById('statsPanel').classList.remove('open'));
+
+  // Date range filter
+  const dateFromEl = document.getElementById('dateFrom');
+  const dateToEl = document.getElementById('dateTo');
+  // Set default values (last 7 days)
+  dateFromEl.value = dateFrom.toISOString().slice(0, 10);
+  dateToEl.value = dateTo.toISOString().slice(0, 10);
+  dateFromEl.addEventListener('change', e => {
+    dateFrom = e.target.value ? new Date(e.target.value) : null;
+    renderSessions();
+    if (document.getElementById('statsPanel').classList.contains('open')) refreshStats();
+  });
+  dateToEl.addEventListener('change', e => {
+    if (e.target.value) {
+      dateTo = new Date(e.target.value);
+      dateTo.setHours(23, 59, 59, 999);
+    } else {
+      dateTo = null;
+    }
+    renderSessions();
+    if (document.getElementById('statsPanel').classList.contains('open')) refreshStats();
+  });
+  document.getElementById('clearDateRangeBtn').addEventListener('click', () => {
+    dateFrom = null;
+    dateTo = null;
+    dateFromEl.value = '';
+    dateToEl.value = '';
+    renderSessions();
+    if (document.getElementById('statsPanel').classList.contains('open')) refreshStats();
+  });
   document.getElementById('closeDiffBtn').addEventListener('click', () => document.getElementById('diffPanel').classList.remove('open'));
   // Diff mode buttons
   document.querySelectorAll('.diff-mode-btn').forEach(btn => {
@@ -308,17 +351,17 @@ function renderSessions() {
       }
       return s.isActive;
     });
-  } else if (currentFilter === 'intervention') {
+  }
+  // Apply date range filter
+  if (dateFrom || dateTo) {
     f = f.filter(s => {
-      const state = sessionStates.get(s.id);
-      if (state?.status) {
-        const t = state.status.type;
-        return t === 'waitingForUser' || t === 'awaitingApproval';
-      }
-      return false;
+      const t = new Date(s.lastActivityAt).getTime();
+      if (dateFrom && t < dateFrom.getTime()) return false;
+      if (dateTo && t > dateTo.getTime()) return false;
+      return true;
     });
   }
-  if (!f.length) { el.innerHTML = `<div class="empty-state"><h2>${searchQuery || currentFilter !== 'all' ?'No matches':'No Sessions'}</h2><p style="color:#666;margin-top:8px">${currentFilter === 'active' ? 'No active sessions found' : currentFilter === 'intervention' ? 'No sessions need input' : ''}</p></div>`; return; }
+  if (!f.length) { el.innerHTML = `<div class="empty-state"><h2>${searchQuery || currentFilter !== 'all' || dateFrom || dateTo ?'No matches':'No Sessions'}</h2><p style="color:#666;margin-top:8px">${currentFilter === 'active' ? 'No active sessions found' : (dateFrom || dateTo) ? 'No sessions in selected date range' : ''}</p></div>`; return; }
   
   if (sessionViewMode === 'list') {
     el.innerHTML = `<div class="sessions-list">${f.map(s => {
@@ -869,7 +912,7 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
     if (e.type === 'keydown' && e.ctrlKey && e.key === 'n') {
       return false; // Let document handler open blank terminal
     }
-    if (e.type === 'keydown' && (e.key === 'F1' || (e.shiftKey && e.key === '?'))) {
+    if (e.type === 'keydown' && e.key === 'F1') {
       return false; // Let document handler open shortcuts help
     }
     if (e.type === 'keydown' && e.key === 'F2') {
@@ -1138,39 +1181,109 @@ async function toggleStatsPanel() {
   }
 }
 
+function formatDuration(ms) {
+  if (!ms || ms <= 0) return '—';
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return '<1m';
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60), rm = m % 60;
+  return h + 'h ' + rm + 'm';
+}
+
 async function refreshStats() {
-  const stats = await api.getGlobalStats();
-  if (!stats) return;
   const el = document.getElementById('statsContent');
-  
-  const totalTokens = stats.totalInputTokens + stats.totalOutputTokens;
-  
-  let modelHtml = '';
-  if (stats.modelBreakdown) {
-    const models = Object.entries(stats.modelBreakdown);
-    if (models.length > 0) {
-      modelHtml = '<h3 style="font-size:13px;color:#ccc;margin:16px 0 8px;">By Model</h3>' +
-        models.map(([name, m]) => `
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Loading…</div>';
+  const fromMs = dateFrom ? dateFrom.getTime() : undefined;
+  const toMs = dateTo ? dateTo.getTime() : undefined;
+  const stats = await api.getGlobalStats(fromMs, toMs);
+  if (!stats) { el.innerHTML = '<div style="padding:20px;color:#e94560">Failed to load stats</div>'; return; }
+
+  const dateLabel = (dateFrom || dateTo)
+    ? `<div style="font-size:11px;color:#888;margin-bottom:12px;text-align:center;">${dateFrom ? dateFrom.toLocaleDateString() : '…'} → ${dateTo ? dateTo.toLocaleDateString() : '…'}</div>`
+    : '<div style="font-size:11px;color:#666;margin-bottom:12px;text-align:center;">All time</div>';
+
+  // Top tools
+  let toolsHtml = '';
+  if (stats.toolBreakdown) {
+    const tools = Object.entries(stats.toolBreakdown).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    if (tools.length > 0) {
+      const maxCount = tools[0][1];
+      toolsHtml = '<h3 class="stats-section-title">Top Tools</h3>' +
+        tools.map(([name, count]) => {
+          const pct = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+          return `
           <div class="model-row">
-            <span class="model-name">${esc(name)}</span>
-            <span class="model-tokens">${formatTokens(m.inputTokens + m.outputTokens)} tokens</span>
-            <span class="model-cost">$${m.cost.toFixed(2)}</span>
-          </div>`).join('');
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+              <span class="model-name">${esc(name)}</span>
+              <span style="color:#888;font-size:11px">${count.toLocaleString()}</span>
+            </div>
+            <div class="stats-bar-bg"><div class="stats-bar-fill" style="width:${pct}%"></div></div>
+          </div>`;
+        }).join('');
     }
   }
-  
+
+  // Top sessions by message count
+  let topSessionsHtml = '';
+  if (stats.perSession && stats.perSession.length > 0) {
+    const sorted = [...stats.perSession]
+      .filter(s => s.messageCount > 0)
+      .sort((a, b) => b.messageCount - a.messageCount)
+      .slice(0, 5);
+    if (sorted.length > 0) {
+      const maxMsgs = sorted[0].messageCount;
+      topSessionsHtml = '<h3 class="stats-section-title">Top Sessions by Messages</h3>' +
+        sorted.map(s => {
+          const pct = maxMsgs > 0 ? Math.round((s.messageCount / maxMsgs) * 100) : 0;
+          const name = sessionNames[s.sessionId] || (s.summary ? s.summary.slice(0, 30) : s.sessionId.slice(0, 8) + '…');
+          return `
+          <div class="model-row">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+              <span style="color:#ccc;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px" title="${esc(name)}">${esc(name)}</span>
+              <span style="color:#888;font-size:11px;white-space:nowrap;margin-left:8px">${s.messageCount} msgs</span>
+            </div>
+            <div class="stats-bar-bg"><div class="stats-bar-fill" style="width:${pct}%;background:#4ade80"></div></div>
+            <div style="font-size:10px;color:#666;margin-top:3px;">${s.totalToolCallCount} tool calls · ${formatDuration(s.durationMs)}</div>
+          </div>`;
+        }).join('');
+    }
+  }
+
+  // Repos breakdown
+  let reposHtml = '';
+  if (stats.repoBreakdown) {
+    const repos = Object.entries(stats.repoBreakdown).sort((a, b) => b[1].sessionCount - a[1].sessionCount).slice(0, 6);
+    if (repos.length > 0) {
+      const maxSess = repos[0][1].sessionCount;
+      reposHtml = '<h3 class="stats-section-title">By Repository</h3>' +
+        repos.map(([name, r]) => {
+          const pct = maxSess > 0 ? Math.round((r.sessionCount / maxSess) * 100) : 0;
+          return `
+          <div class="model-row">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+              <span class="model-name">${esc(name)}</span>
+              <span style="color:#888;font-size:11px">${r.sessionCount} sessions</span>
+            </div>
+            <div class="stats-bar-bg"><div class="stats-bar-fill" style="width:${pct}%;background:#60a5fa"></div></div>
+            <div style="font-size:10px;color:#666;margin-top:3px;">${r.messageCount} total messages</div>
+          </div>`;
+        }).join('');
+    }
+  }
+
   el.innerHTML = `
+    ${dateLabel}
     <div class="stats-grid">
-      <div class="stats-card"><div class="value">${formatTokens(totalTokens)}</div><div class="label">Total Tokens</div></div>
-      <div class="stats-card"><div class="value">$${stats.estimatedCostUsd.toFixed(2)}</div><div class="label">Est. Cost</div></div>
       <div class="stats-card"><div class="value">${stats.sessionCount}</div><div class="label">Sessions</div></div>
       <div class="stats-card"><div class="value">${stats.totalMessages}</div><div class="label">Messages</div></div>
-      <div class="stats-card"><div class="value">${formatTokens(stats.totalInputTokens)}</div><div class="label">Input Tokens</div></div>
-      <div class="stats-card"><div class="value">${formatTokens(stats.totalOutputTokens)}</div><div class="label">Output Tokens</div></div>
-      <div class="stats-card"><div class="value">${formatTokens(stats.totalCacheReadTokens)}</div><div class="label">Cache Read</div></div>
-      <div class="stats-card"><div class="value">${formatTokens(stats.totalCacheCreationTokens)}</div><div class="label">Cache Created</div></div>
+      <div class="stats-card"><div class="value">${stats.totalToolCalls.toLocaleString()}</div><div class="label">Tool Calls</div></div>
+      <div class="stats-card"><div class="value">${stats.avgMessagesPerSession}</div><div class="label">Avg Msgs/Session</div></div>
+      <div class="stats-card"><div class="value">${Object.keys(stats.repoBreakdown || {}).length}</div><div class="label">Repos</div></div>
+      <div class="stats-card"><div class="value">${formatDuration(stats.avgDurationMs)}</div><div class="label">Avg Duration</div></div>
     </div>
-    ${modelHtml}
+    ${toolsHtml}
+    ${topSessionsHtml}
+    ${reposHtml}
   `;
 }
 
@@ -1382,7 +1495,7 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     openBlankTerminal();
   }
-  if (e.key === 'F1' || (!e.ctrlKey && e.shiftKey && e.key === '?')) {
+  if (e.key === 'F1') {
     e.preventDefault();
     toggleShortcutsHelp();
   }

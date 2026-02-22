@@ -100,20 +100,12 @@ function updateTrayContextMenu(): void {
   
   const { total, active, needingInput } = currentTrayStats;
   
-  // Get token stats for tray menu
-  const stats = globalStatsService?.getGlobalStats();
-  const tokenLabel = stats
-    ? `Tokens: ${GlobalStatsService.formatTokens(stats.totalInputTokens + stats.totalOutputTokens)} (${GlobalStatsService.formatCost(stats.estimatedCostUsd)})`
-    : 'Tokens: -';
-  
   const menuItems: Electron.MenuItemConstructorOptions[] = [
     { label: 'Open', click: () => mainWindow?.show() },
     { type: 'separator' },
     { label: `Sessions: ${total}`, enabled: false },
     { label: `Active: ${active}`, enabled: false },
     { label: `Needing Input: ${needingInput}`, enabled: false },
-    { type: 'separator' },
-    { label: tokenLabel, enabled: false },
     { type: 'separator' },
     { label: 'Refresh Sessions', click: () => monitorService.refreshSessions() },
     { type: 'separator' },
@@ -475,9 +467,25 @@ function setupIPC(): void {
   // === GLOBAL STATS ===
 
   // Get aggregated stats (triggers fresh session scan on-demand)
-  ipcMain.handle('get-global-stats', async () => {
+  ipcMain.handle('get-global-stats', async (_event, fromMs?: number, toMs?: number) => {
     const sessions = await monitorService.scanAllSessions();
     updateTrayStats(sessions);
+    const fromDate = fromMs ? new Date(fromMs) : undefined;
+    const toDate = toMs ? new Date(toMs) : undefined;
+    const sessionStats = await monitorService.scanAllSessionStats(fromDate, toDate);
+    globalStatsService.clearAll();
+    for (const s of sessionStats) {
+      globalStatsService.setSessionStats(s.id, {
+        messageCount: s.messageCount,
+        toolCalls: s.toolCalls,
+        totalToolCallCount: s.totalToolCallCount,
+        cwd: s.cwd,
+        summary: s.summary,
+        startedAt: s.startedAt,
+        lastActivityAt: s.lastActivityAt,
+        durationMs: s.durationMs,
+      });
+    }
     return globalStatsService.getGlobalStats();
   });
 
