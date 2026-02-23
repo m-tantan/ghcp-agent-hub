@@ -851,7 +851,8 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
     <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;pointer-events:auto;">
       ${nameDisplayHtml}
     </div>
-    <div style="display:flex;align-items:center;flex-shrink:0;">
+    <div style="display:flex;align-items:center;flex-shrink:0;gap:4px;">
+      <button class="term-mic-btn" id="micBtn-${termId}" onclick="event.stopPropagation(); toggleSpeechToText('${termId}')" title="Speech-to-text (click to record)">🎙️ Speak</button>
       <button class="terminal-instance-close" onclick="closeTerminal('${termId}')" title="Close">&#x2715;</button>
     </div>`;
   wrapper.appendChild(header);
@@ -1043,6 +1044,125 @@ function editTermName(termId) {
   };
   input.addEventListener('blur', save);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } if (e.key === 'Escape') { input.value = current; input.blur(); } });
+}
+
+// === SPEECH-TO-TEXT (Parakeet API) ===
+const PARAKEET_API_URL = 'http://localhost:5092/v1/audio/transcriptions';
+const sttState = new Map(); // termId -> { recording: bool, mediaRecorder, chunks }
+
+async function toggleSpeechToText(termId) {
+  const btn = document.getElementById(`micBtn-${termId}`);
+  const t = terminals.get(termId);
+  if (!t) return;
+
+  const state = sttState.get(termId);
+  if (state && state.recording) {
+    // Stop recording
+    state.mediaRecorder.stop();
+    return;
+  }
+
+  // Start recording
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    alert('Microphone access denied. Please allow microphone permissions.');
+    return;
+  }
+
+  const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+  const chunks = [];
+  sttState.set(termId, { recording: true, mediaRecorder, chunks });
+
+  if (btn) { btn.classList.add('recording'); btn.textContent = '⏹ Stop'; }
+
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+  mediaRecorder.onstop = async () => {
+    stream.getTracks().forEach(track => track.stop());
+    sttState.delete(termId);
+    if (btn) { btn.classList.remove('recording'); btn.textContent = '🎙️ Speak'; }
+
+    if (chunks.length === 0) return;
+    const blob = new Blob(chunks, { type: 'audio/webm' });
+
+    // Convert to WAV for Parakeet API compatibility
+    const wavBlob = await webmToWav(blob);
+
+    if (btn) { btn.textContent = '⏳ ...'; btn.disabled = true; }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', wavBlob, 'recording.wav');
+      formData.append('model', 'parakeet');
+      formData.append('response_format', 'text');
+
+      const res = await fetch(PARAKEET_API_URL, { method: 'POST', body: formData });
+      if (!res.ok) throw new Error(`Parakeet API error: ${res.status} ${res.statusText}`);
+
+      const text = (await res.text()).trim();
+      if (text && t) {
+        api.terminalWrite(termId, text);
+      }
+    } catch (err) {
+      console.error('Speech-to-text error:', err);
+      alert(`Speech-to-text failed: ${err.message}\n\nMake sure Parakeet API is running at ${PARAKEET_API_URL}`);
+    } finally {
+      if (btn) { btn.textContent = '🎙️ Speak'; btn.disabled = false; }
+    }
+  };
+
+  mediaRecorder.start();
+}
+
+// Convert webm audio blob to WAV (PCM 16-bit, 16kHz mono) for Parakeet
+async function webmToWav(webmBlob) {
+  const arrayBuffer = await webmBlob.arrayBuffer();
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+  const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+  audioCtx.close();
+
+  // Downmix to mono
+  const samples = decoded.numberOfChannels > 1
+    ? Float32Array.from(decoded.getChannelData(0), (v, i) => (v + decoded.getChannelData(1)[i]) / 2)
+    : decoded.getChannelData(0);
+
+  // Resample to 16kHz if needed
+  const sampleRate = 16000;
+  let pcm = samples;
+  if (decoded.sampleRate !== sampleRate) {
+    const ratio = decoded.sampleRate / sampleRate;
+    const newLen = Math.round(samples.length / ratio);
+    pcm = new Float32Array(newLen);
+    for (let i = 0; i < newLen; i++) {
+      pcm[i] = samples[Math.round(i * ratio)];
+    }
+  }
+
+  // Encode WAV
+  const numSamples = pcm.length;
+  const buffer = new ArrayBuffer(44 + numSamples * 2);
+  const view = new DataView(buffer);
+  const writeStr = (off, str) => { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)); };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + numSamples * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, numSamples * 2, true);
+  for (let i = 0; i < numSamples; i++) {
+    const s = Math.max(-1, Math.min(1, pcm[i]));
+    view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return new Blob([buffer], { type: 'audio/wav' });
 }
 
 function toggleMaximizeTerminal(termId) {

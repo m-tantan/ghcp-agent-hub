@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Speech-to-text via Parakeet API — mic button in each terminal header to record and transcribe
 - Ctrl+R shortcut to add/edit memo on active terminal
 - Ctrl+1–9 to switch focus to terminal by visual position (left-to-right, top-to-bottom)
 - Drag-and-drop files onto terminals to `cd` into the file's directory
