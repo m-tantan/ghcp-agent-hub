@@ -841,14 +841,17 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
   const nameDisplayHtml = `<span class="term-custom-name" id="${customNameId}" onclick="event.stopPropagation(); editTermName('${termId}')" title="Click to add memo"></span><button class="term-add-name" onclick="event.stopPropagation(); editTermName('${termId}')" title="Add memo">✏</button>`;
   
   header.innerHTML = `
-    <div style="display:flex;align-items:center;gap:4px;position:relative;">
+    <div style="display:flex;align-items:center;gap:4px;position:relative;flex-shrink:0;">
       <button class="term-color-btn" style="background:${color || '#8b949e'}" onclick="event.stopPropagation(); toggleColorPicker('${termId}')" title="Change color"></button>
       ${colorPickerHtml}
       <button class="terminal-instance-minimize" onclick="toggleMinimizeTerminal('${termId}')" title="Minimize">&#x25BC;</button>
       <button class="terminal-instance-maximize" onclick="toggleMaximizeTerminal('${termId}')" title="Maximize">&#x26F6;</button>
+      <span class="terminal-instance-label" title="${esc(cwd)}">${nameHtml}${folderHtml} ${sessionLabel}</span>
     </div>
-    <span class="terminal-instance-label" title="${esc(cwd)}">${nameHtml}${nameDisplayHtml}${folderHtml} ${sessionLabel}</span>
-    <div style="display:flex;align-items:center;margin-left:20px;">
+    <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;pointer-events:auto;">
+      ${nameDisplayHtml}
+    </div>
+    <div style="display:flex;align-items:center;flex-shrink:0;">
       <button class="terminal-instance-close" onclick="closeTerminal('${termId}')" title="Close">&#x2715;</button>
     </div>`;
   wrapper.appendChild(header);
@@ -858,6 +861,23 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
   wrapper.appendChild(termArea);
   
   document.getElementById('terminalContainer').appendChild(wrapper);
+
+  // Drag-and-drop file: cd to the file's parent directory
+  wrapper.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'link'; wrapper.style.outline = '2px solid #e94560'; });
+  wrapper.addEventListener('dragleave', () => { wrapper.style.outline = ''; });
+  wrapper.addEventListener('drop', e => {
+    e.preventDefault();
+    wrapper.style.outline = '';
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file && file.path) {
+      const filePath = file.path.replace(/\\/g, '/');
+      // If it's a directory use it directly, otherwise use the parent folder
+      const isDir = !filePath.split('/').pop().includes('.');
+      const dir = isDir ? filePath : filePath.substring(0, filePath.lastIndexOf('/'));
+      api.terminalWrite(termId, `cd "${dir}"\r`);
+    }
+  });
+
   term.open(termArea);
   // Load WebGL renderer AFTER open() for GPU-accelerated rendering
   try {
@@ -917,6 +937,9 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
     }
     if (e.type === 'keydown' && e.key === 'F2') {
       return false; // Let document handler rename terminal
+    }
+    if (e.type === 'keydown' && e.ctrlKey && e.key === 'r') {
+      return false; // Let document handler open memo editor
     }
     return true;
   });
@@ -1500,6 +1523,11 @@ document.addEventListener('keydown', e => {
     toggleShortcutsHelp();
   }
   if (e.key === 'F2') {
+    e.preventDefault();
+    const tid = activeTerminalId || (terminals.size > 0 ? terminals.keys().next().value : null);
+    if (tid) editTermName(tid);
+  }
+  if (e.ctrlKey && e.key === 'r') {
     e.preventDefault();
     const tid = activeTerminalId || (terminals.size > 0 ? terminals.keys().next().value : null);
     if (tid) editTermName(tid);
