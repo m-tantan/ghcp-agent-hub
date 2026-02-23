@@ -1,0 +1,20 @@
+appId: com.ghcp-agent-hub.app
+productName: GHCP Agent Hub
+directories:
+  output: release
+files:
+  - dist/**/*
+  - renderer/**/*
+  - package.json
+extraResources:
+  - from: scripts
+    to: scripts
+asar: true
+win:
+  target: nsis
+  icon: null
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true

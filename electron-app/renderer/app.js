@@ -941,6 +941,9 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
     if (e.type === 'keydown' && e.ctrlKey && e.key === 'r') {
       return false; // Let document handler open memo editor
     }
+    if (e.type === 'keydown' && e.ctrlKey && e.key >= '1' && e.key <= '9') {
+      return false; // Let document handler switch terminals
+    }
     return true;
   });
   
@@ -1543,6 +1546,20 @@ document.addEventListener('keydown', e => {
     } else if (terminals.size > 0) {
       // No focused terminal — maximize the first one
       toggleMaximizeTerminal(terminals.keys().next().value);
+    }
+  }
+  // Ctrl+1–9: focus terminal by visual position (left-to-right, top-to-bottom)
+  if (e.ctrlKey && !e.shiftKey && e.key >= '1' && e.key <= '9') {
+    e.preventDefault();
+    const idx = parseInt(e.key) - 1;
+    const container = document.getElementById('terminalContainer');
+    if (container) {
+      const wrappers = container.querySelectorAll('.terminal-instance');
+      if (idx < wrappers.length) {
+        const tid = wrappers[idx].id.replace('terminal-', '');
+        const t = terminals.get(tid);
+        if (t) { t.term.focus(); activeTerminalId = tid; }
+      }
     }
   }
 });
