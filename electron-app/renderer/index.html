@@ -111,6 +111,50 @@
       </div>
       <div class="diff-summary" id="diffSummary"></div>
     </div>
+    <!-- Diff Review Mode Overlay -->
+    <div class="diff-review-overlay" id="diffReviewOverlay">
+      <div class="diff-review-terminal" id="diffReviewTermArea"></div>
+      <div class="diff-review-panel">
+        <div class="diff-review-header">
+          <h3>
+            <span class="dr-badge" id="drCommentBadge" style="display:none">0</span>
+            <span id="drSessionInfo" class="dr-session"></span>
+            <span id="drBranchInfo" class="dr-branch"></span>
+          </h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div class="diff-review-mode-btns">
+              <button class="diff-review-mode-btn active" data-drmode="unstaged">Unstaged</button>
+              <button class="diff-review-mode-btn" data-drmode="staged">Staged</button>
+              <button class="diff-review-mode-btn" data-drmode="branch">Branch</button>
+            </div>
+            <button class="diff-review-close" id="closeDiffReview" title="Close diff review">✕</button>
+          </div>
+        </div>
+        <div class="diff-review-body">
+          <div class="dr-file-tree" id="drFileTree">
+            <div class="dr-tree-header">Changes</div>
+          </div>
+          <div class="dr-file-view">
+            <div class="dr-file-header" id="drFileHeader">
+              <span class="dr-file-icon">📄</span>
+              <span class="dr-file-name" id="drFileName">Select a file</span>
+            </div>
+            <div class="dr-file-content" id="drFileContent">
+              <div style="padding:24px;color:#666;text-align:center;">Click a file in the tree to view changes</div>
+            </div>
+          </div>
+        </div>
+        <div class="dr-comments-panel collapsed" id="drCommentsPanel">
+          <div class="dr-comments-header" onclick="toggleDrCommentsPanel()">
+            <span>▶</span>
+            <span class="dr-comments-title">💬 <span id="drCommentsCount">0</span> Comments</span>
+            <button class="dr-comments-clear" onclick="event.stopPropagation(); clearDrComments()">🗑 Clear</button>
+            <button class="dr-comments-send" onclick="event.stopPropagation(); sendDrComments()">✈ Send to Copilot</button>
+          </div>
+          <div class="dr-comments-body" id="drCommentsBody"></div>
+        </div>
+      </div>
+    </div>
     <!-- Search Results Panel -->
     <div class="search-results-panel" id="searchResultsPanel"></div>
     <!-- Ctrl+F Terminal Search Overlay -->

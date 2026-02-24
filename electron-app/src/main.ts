@@ -464,6 +464,11 @@ function setupIPC(): void {
     return await gitDiffService.getDiff(cwd, mode, baseBranch);
   });
 
+  // Get annotated file (full file with diff line types)
+  ipcMain.handle('get-annotated-file', async (_event, cwd: string, filePath: string, mode: string, baseBranch?: string) => {
+    return await gitDiffService.getAnnotatedFile(cwd, filePath, mode as DiffMode, baseBranch);
+  });
+
   // === GLOBAL STATS ===
 
   // Get aggregated stats (triggers fresh session scan on-demand)

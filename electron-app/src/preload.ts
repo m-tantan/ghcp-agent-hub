@@ -83,6 +83,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Git Diff & Code Changes
   getCodeChanges: (cwd: string) => ipcRenderer.invoke('get-code-changes', cwd),
   getDiff: (cwd: string, mode: string, baseBranch?: string) => ipcRenderer.invoke('get-diff', cwd, mode, baseBranch),
+  getAnnotatedFile: (cwd: string, filePath: string, mode: string, baseBranch?: string) => ipcRenderer.invoke('get-annotated-file', cwd, filePath, mode, baseBranch),
 
   // Global Stats
   getGlobalStats: (fromMs?: number, toMs?: number) => ipcRenderer.invoke('get-global-stats', fromMs, toMs),

@@ -7,8 +7,11 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const execAsync = promisify(exec);
+const fsPromises = fs.promises;
 
 export interface DiffFile {
   path: string;
@@ -25,7 +28,8 @@ export interface DiffHunk {
 export interface DiffLine {
   type: 'add' | 'remove' | 'context';
   content: string;
-  lineNumber?: number;
+  oldLineNumber?: number;
+  newLineNumber?: number;
 }
 
 export interface FileDiff {
@@ -135,20 +139,29 @@ export class GitDiffService {
       const hunks: DiffHunk[] = [];
       let currentHunk: DiffHunk | null = null;
       let adds = 0, dels = 0;
+      let oldLine = 1, newLine = 1;
 
       for (const line of lines) {
         if (line.startsWith('@@')) {
+          // Parse hunk header: @@ -oldStart,oldCount +newStart,newCount @@
+          const hunkMatch = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+          oldLine = hunkMatch ? parseInt(hunkMatch[1]) : 1;
+          newLine = hunkMatch ? parseInt(hunkMatch[2]) : 1;
           currentHunk = { header: line, lines: [] };
           hunks.push(currentHunk);
         } else if (currentHunk) {
           if (line.startsWith('+') && !line.startsWith('+++')) {
-            currentHunk.lines.push({ type: 'add', content: line.substring(1) });
+            currentHunk.lines.push({ type: 'add', content: line.substring(1), newLineNumber: newLine });
+            newLine++;
             adds++;
           } else if (line.startsWith('-') && !line.startsWith('---')) {
-            currentHunk.lines.push({ type: 'remove', content: line.substring(1) });
+            currentHunk.lines.push({ type: 'remove', content: line.substring(1), oldLineNumber: oldLine });
+            oldLine++;
             dels++;
           } else if (line.startsWith(' ')) {
-            currentHunk.lines.push({ type: 'context', content: line.substring(1) });
+            currentHunk.lines.push({ type: 'context', content: line.substring(1), oldLineNumber: oldLine, newLineNumber: newLine });
+            oldLine++;
+            newLine++;
           }
         }
       }
@@ -164,5 +177,109 @@ export class GitDiffService {
       diffs,
       summary: { additions: totalAdds, deletions: totalDels, filesChanged: files.length },
     };
+  }
+
+  /**
+   * Read file content from the working tree
+   */
+  async readFileContent(cwd: string, filePath: string): Promise<{ lines: string[]; fullPath: string } | null> {
+    const fullPath = path.resolve(cwd, filePath);
+    try {
+      const content = await fsPromises.readFile(fullPath, 'utf-8');
+      return { lines: content.split('\n'), fullPath };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get full file content annotated with diff information.
+   * Returns each line of the current file with its type (add/unchanged)
+   * plus interleaved removed lines from the diff.
+   */
+  async getAnnotatedFile(
+    cwd: string,
+    filePath: string,
+    mode: DiffMode = 'unstaged',
+    baseBranch?: string
+  ): Promise<{ lines: Array<{ lineNumber: number; content: string; type: 'add' | 'remove' | 'unchanged' }>; fullPath: string } | null> {
+    // Read current file
+    const fileData = await this.readFileContent(cwd, filePath);
+    if (!fileData) return null;
+
+    // Get diff for this specific file
+    let cmd: string;
+    switch (mode) {
+      case 'staged': cmd = `git diff --cached -- "${filePath}"`; break;
+      case 'branch': cmd = `git diff ${baseBranch || 'main'}...HEAD -- "${filePath}"`; break;
+      default: cmd = `git diff -- "${filePath}"`;
+    }
+
+    let diffResult: DiffResult;
+    try {
+      const { stdout } = await execAsync(cmd, { cwd, timeout: 15000, maxBuffer: 5 * 1024 * 1024 });
+      diffResult = this.parseDiff(stdout);
+    } catch {
+      // No diff — return file as all unchanged
+      return {
+        fullPath: fileData.fullPath,
+        lines: fileData.lines.map((content, i) => ({ lineNumber: i + 1, content, type: 'unchanged' as const })),
+      };
+    }
+
+    const fileDiff = diffResult.diffs[0];
+    if (!fileDiff || fileDiff.hunks.length === 0) {
+      return {
+        fullPath: fileData.fullPath,
+        lines: fileData.lines.map((content, i) => ({ lineNumber: i + 1, content, type: 'unchanged' as const })),
+      };
+    }
+
+    // Build a set of added line numbers and a map of removed lines (keyed by "insert before" new-line)
+    const addedLines = new Set<number>();
+    const removedByNewLine = new Map<number, Array<{ content: string; oldLineNumber: number }>>();
+
+    for (const hunk of fileDiff.hunks) {
+      let nextNewLine = 0;
+      for (const dl of hunk.lines) {
+        if (dl.type === 'add') {
+          addedLines.add(dl.newLineNumber!);
+          nextNewLine = dl.newLineNumber! + 1;
+        } else if (dl.type === 'remove') {
+          // Group removed lines before the next context/add line
+          const key = nextNewLine || (dl.oldLineNumber || 0);
+          if (!removedByNewLine.has(key)) removedByNewLine.set(key, []);
+          removedByNewLine.get(key)!.push({ content: dl.content, oldLineNumber: dl.oldLineNumber! });
+        } else {
+          nextNewLine = dl.newLineNumber! + 1;
+        }
+      }
+    }
+
+    // Build annotated output
+    const result: Array<{ lineNumber: number; content: string; type: 'add' | 'remove' | 'unchanged' }> = [];
+
+    for (let i = 0; i < fileData.lines.length; i++) {
+      const lineNum = i + 1;
+      // Insert removed lines that appear before this line
+      const removed = removedByNewLine.get(lineNum);
+      if (removed) {
+        for (const r of removed) {
+          result.push({ lineNumber: r.oldLineNumber, content: r.content, type: 'remove' });
+        }
+        removedByNewLine.delete(lineNum);
+      }
+      const type = addedLines.has(lineNum) ? 'add' as const : 'unchanged' as const;
+      result.push({ lineNumber: lineNum, content: fileData.lines[i], type });
+    }
+
+    // Append any trailing removed lines
+    for (const [, removed] of removedByNewLine) {
+      for (const r of removed) {
+        result.push({ lineNumber: r.oldLineNumber, content: r.content, type: 'remove' });
+      }
+    }
+
+    return { fullPath: fileData.fullPath, lines: result };
   }
 }

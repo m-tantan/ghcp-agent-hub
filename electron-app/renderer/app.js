@@ -34,6 +34,15 @@ const terminalColors = {}; // termId -> color
 let repoColors = {}; // repo path -> base color hex
 const TERMINAL_PALETTE = ['#e94560','#4ade80','#60a5fa','#f59e0b','#a78bfa','#fb923c','#22d3ee','#f472b6','#34d399','#fbbf24'];
 
+// Diff Review state
+let diffReviewTermId = null;
+let diffReviewCwd = null;
+let diffReviewMode = 'unstaged';
+let diffReviewDiffData = null;
+let diffReviewComments = []; // { filePath, lineNumber, lineContent, lineType, comment }
+let diffReviewSelectedFile = null;
+let diffReviewTerm = null; // cloned xterm reference
+
 function hashColor(name) {
   // Use golden angle (137.508°) multiplied by a hash seed for maximum hue spread
   let hash = 0;
@@ -245,6 +254,16 @@ async function init() {
       btn.classList.add('active');
       currentDiffMode = btn.dataset.mode;
       if (currentDiffCwd) loadDiff(currentDiffCwd, currentDiffMode);
+    });
+  });
+  // Diff Review mode buttons
+  document.getElementById('closeDiffReview').addEventListener('click', closeDiffReview);
+  document.querySelectorAll('.diff-review-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.diff-review-mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      diffReviewMode = btn.dataset.drmode;
+      if (diffReviewCwd) loadDiffReviewData();
     });
   });
   // Close search results and color pickers when clicking outside
@@ -879,6 +898,7 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
       ${nameDisplayHtml}
     </div>
     <div style="display:flex;align-items:center;flex-shrink:0;">
+      <button class="diff-review-mode-btn" onclick="openDiffReview('${termId}')" title="Diff Review" style="margin-right:4px;padding:2px 8px;">⇄ Diff</button>
       <button class="terminal-instance-close" onclick="closeTerminal('${termId}')" title="Close">&#x2715;</button>
     </div>`;
   wrapper.appendChild(header);
@@ -1690,6 +1710,343 @@ function selectTermSearchResult(termId) {
   wrapper.addEventListener('animationend', () => wrapper.classList.remove('flash'), { once: true });
   wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
   setTimeout(() => { t.fitAddon.fit(); t.term.focus(); }, 100);
+}
+
+// === DIFF REVIEW MODE ===
+
+async function openDiffReview(termId) {
+  const t = terminals.get(termId);
+  if (!t) return;
+  diffReviewTermId = termId;
+  diffReviewCwd = t.cwd;
+  diffReviewComments = [];
+  diffReviewSelectedFile = null;
+  diffReviewMode = 'unstaged';
+
+  // Reset mode buttons
+  document.querySelectorAll('.diff-review-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.drmode === 'unstaged'));
+
+  // Show session/branch info
+  const sid = t.sessionId;
+  document.getElementById('drSessionInfo').textContent = sid ? sid.slice(0, 8) + '...' : '';
+  document.getElementById('drBranchInfo').textContent = '';
+
+  // Move terminal xterm element into the review panel
+  const termArea = document.getElementById('diffReviewTermArea');
+  termArea.innerHTML = '';
+  const wrapper = document.getElementById(`terminal-${termId}`);
+  if (wrapper) {
+    // Store original parent for restoration
+    wrapper._drOriginalParent = wrapper.parentElement;
+    wrapper._drOriginalStyle = wrapper.style.cssText;
+    wrapper.style.cssText = 'flex:1;display:flex;flex-direction:column;border-radius:0;';
+    termArea.appendChild(wrapper);
+  }
+
+  // Show overlay
+  document.getElementById('diffReviewOverlay').classList.add('open');
+
+  // Refit terminal
+  setTimeout(() => { t.fitAddon.fit(); t.term.focus(); }, 100);
+
+  // Load diff data
+  await loadDiffReviewData();
+  updateDrCommentsBadge();
+}
+
+function closeDiffReview() {
+  const overlay = document.getElementById('diffReviewOverlay');
+  overlay.classList.remove('open');
+
+  // Restore terminal to original container
+  if (diffReviewTermId) {
+    const wrapper = document.getElementById(`terminal-${diffReviewTermId}`);
+    if (wrapper && wrapper._drOriginalParent) {
+      wrapper.style.cssText = wrapper._drOriginalStyle || '';
+      wrapper._drOriginalParent.appendChild(wrapper);
+      delete wrapper._drOriginalParent;
+      delete wrapper._drOriginalStyle;
+    }
+    const t = terminals.get(diffReviewTermId);
+    if (t) setTimeout(() => t.fitAddon.fit(), 50);
+  }
+
+  diffReviewTermId = null;
+  diffReviewCwd = null;
+  document.getElementById('drFileTree').innerHTML = '<div class="dr-tree-header">Changes</div>';
+  document.getElementById('drFileContent').innerHTML = '<div style="padding:24px;color:#666;text-align:center;">Click a file in the tree to view changes</div>';
+  document.getElementById('drFileName').textContent = 'Select a file';
+}
+
+async function loadDiffReviewData() {
+  if (!diffReviewCwd) return;
+  const diff = await api.getDiff(diffReviewCwd, diffReviewMode);
+  diffReviewDiffData = diff;
+  renderDrFileTree(diff.files);
+  // Auto-select first file
+  if (diff.files && diff.files.length > 0) {
+    selectDrFile(diff.files[0].path);
+  } else {
+    document.getElementById('drFileContent').innerHTML = '<div style="padding:24px;color:#666;text-align:center;">No changes found</div>';
+    document.getElementById('drFileName').textContent = 'No changes';
+  }
+}
+
+// --- File Tree ---
+
+function buildFileTree(files) {
+  const root = { name: '', type: 'dir', children: {}, _files: [] };
+  for (const f of files) {
+    const parts = f.path.split(/[/\\]/);
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!node.children[parts[i]]) {
+        node.children[parts[i]] = { name: parts[i], type: 'dir', children: {}, _files: [] };
+      }
+      node = node.children[parts[i]];
+    }
+    node._files.push({ name: parts[parts.length - 1], fullPath: f.path, additions: f.additions, deletions: f.deletions, status: f.status });
+  }
+  return root;
+}
+
+function renderDrFileTree(files) {
+  const treeEl = document.getElementById('drFileTree');
+  const tree = buildFileTree(files);
+  let html = '<div class="dr-tree-header">Changes</div>';
+  html += renderTreeNode(tree, 0);
+  treeEl.innerHTML = html;
+}
+
+function renderTreeNode(node, depth) {
+  let html = '';
+  // Render subdirectories
+  const dirs = Object.values(node.children).sort((a, b) => a.name.localeCompare(b.name));
+  for (const dir of dirs) {
+    const indent = depth * 16;
+    html += `<div class="dr-tree-item" style="padding-left:${8 + indent}px" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.style.display = this.classList.contains('collapsed') ? 'none' : 'block'">
+      <span class="dr-chevron">▼</span>
+      <span class="dr-icon">📁</span>
+      <span class="dr-name">${esc(dir.name)}</span>
+    </div>
+    <div>`;
+    html += renderTreeNode(dir, depth + 1);
+    html += '</div>';
+  }
+  // Render files
+  for (const f of node._files) {
+    const indent = depth * 16;
+    const icon = f.status === 'added' ? '🟢' : f.status === 'deleted' ? '🔴' : f.status === 'renamed' ? '🔵' : '📄';
+    html += `<div class="dr-tree-item" style="padding-left:${8 + indent}px" data-filepath="${esc(f.fullPath)}" onclick="selectDrFile('${escJs(f.fullPath)}')">
+      <span class="dr-chevron" style="visibility:hidden">▶</span>
+      <span class="dr-icon">${icon}</span>
+      <span class="dr-name">${esc(f.name)}</span>
+      <span class="dr-stats"><span class="adds">+${f.additions}</span><span class="dels">/-${f.deletions}</span></span>
+    </div>`;
+  }
+  return html;
+}
+
+async function selectDrFile(filePath) {
+  diffReviewSelectedFile = filePath;
+  // Highlight in tree
+  document.querySelectorAll('#drFileTree .dr-tree-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.filepath === filePath);
+  });
+  // Update header
+  const fileName = filePath.split(/[/\\]/).pop();
+  document.getElementById('drFileName').textContent = fileName;
+
+  // Load annotated file
+  const annotated = await api.getAnnotatedFile(diffReviewCwd, filePath, diffReviewMode);
+  if (!annotated || !annotated.lines) {
+    document.getElementById('drFileContent').innerHTML = '<div style="padding:24px;color:#666;">Unable to read file</div>';
+    return;
+  }
+  renderDrFileContent(annotated.lines, filePath);
+}
+
+// --- File Content with Line Numbers ---
+
+function renderDrFileContent(lines, filePath) {
+  const el = document.getElementById('drFileContent');
+  const commentedLines = new Set(diffReviewComments.filter(c => c.filePath === filePath).map(c => c.lineNumber));
+
+  let html = '';
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const typeClass = l.type !== 'unchanged' ? `type-${l.type}` : '';
+    const hasComment = commentedLines.has(l.lineNumber) ? 'has-comment' : '';
+    const commentIcon = commentedLines.has(l.lineNumber) ? '💬' : '';
+    const lineNumDisplay = l.type === 'remove' ? `<span style="color:#ef4444;font-style:italic">${l.lineNumber}</span>` : l.lineNumber;
+    html += `<div class="dr-line ${typeClass} ${hasComment}" data-idx="${i}" data-ln="${l.lineNumber}" data-type="${l.type}" onclick="clickDrLine(this, '${escJs(filePath)}', ${l.lineNumber}, '${l.type}')">
+      <div class="dr-line-gutter">${lineNumDisplay}</div>
+      <div class="dr-line-content">${esc(l.content)}</div>
+      <div class="dr-line-comment-icon">${commentIcon}</div>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+// --- Inline Comment ---
+
+function clickDrLine(lineEl, filePath, lineNumber, lineType) {
+  // Remove any existing comment form
+  const existing = document.querySelector('.dr-comment-form');
+  if (existing) existing.remove();
+
+  const content = lineEl.querySelector('.dr-line-content')?.textContent || '';
+
+  const form = document.createElement('div');
+  form.className = 'dr-comment-form';
+  form.innerHTML = `
+    <button class="dr-btn-cancel" onclick="this.parentElement.remove()" title="Cancel">✕</button>
+    <input type="text" placeholder="Add a comment..." id="drCommentInput" autofocus>
+    <button class="dr-btn-submit" onclick="submitDrComment('${escJs(filePath)}', ${lineNumber}, '${escJs(content)}', '${lineType}')" title="Submit">⬆</button>
+  `;
+  lineEl.insertAdjacentElement('afterend', form);
+  const input = form.querySelector('input');
+  input.focus();
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitDrComment(filePath, lineNumber, content, lineType);
+    if (e.key === 'Escape') form.remove();
+  });
+}
+
+function submitDrComment(filePath, lineNumber, lineContent, lineType) {
+  const input = document.getElementById('drCommentInput');
+  if (!input) return;
+  const comment = input.value.trim();
+  if (!comment) return;
+
+  diffReviewComments.push({ filePath, lineNumber, lineContent, lineType, comment });
+
+  // Remove form
+  const form = input.closest('.dr-comment-form');
+  if (form) form.remove();
+
+  // Update line indicator
+  updateDrCommentsBadge();
+  renderDrCommentsBody();
+
+  // Re-render file to show comment icon
+  if (diffReviewSelectedFile === filePath) {
+    selectDrFile(filePath);
+  }
+
+  // Expand comments panel
+  const panel = document.getElementById('drCommentsPanel');
+  panel.classList.remove('collapsed');
+  panel.querySelector('.dr-comments-header span:first-child').textContent = '▼';
+}
+
+// --- Comment Aggregation Panel ---
+
+function updateDrCommentsBadge() {
+  const count = diffReviewComments.length;
+  document.getElementById('drCommentsCount').textContent = count;
+  const badge = document.getElementById('drCommentBadge');
+  badge.textContent = count;
+  badge.style.display = count > 0 ? 'inline' : 'none';
+  // Update send button text
+  const sendBtn = document.querySelector('.dr-comments-send');
+  if (sendBtn) sendBtn.textContent = `✈ Send ${count} to Copilot`;
+}
+
+function toggleDrCommentsPanel() {
+  const panel = document.getElementById('drCommentsPanel');
+  const chevron = panel.querySelector('.dr-comments-header span:first-child');
+  if (panel.classList.contains('collapsed')) {
+    panel.classList.remove('collapsed');
+    chevron.textContent = '▼';
+  } else {
+    panel.classList.add('collapsed');
+    chevron.textContent = '▶';
+  }
+}
+
+function renderDrCommentsBody() {
+  const body = document.getElementById('drCommentsBody');
+  if (diffReviewComments.length === 0) {
+    body.innerHTML = '<div style="padding:16px;color:#666;text-align:center;font-size:12px;">No comments yet. Click on a line to add one.</div>';
+    return;
+  }
+
+  // Group by file
+  const grouped = {};
+  for (const c of diffReviewComments) {
+    if (!grouped[c.filePath]) grouped[c.filePath] = [];
+    grouped[c.filePath].push(c);
+  }
+
+  let html = '';
+  for (const [fp, comments] of Object.entries(grouped)) {
+    const fileName = fp.split(/[/\\]/).pop();
+    html += `<div class="dr-comment-group-header">📄 ${esc(fileName)} (${comments.length})</div>`;
+    for (let ci = 0; ci < comments.length; ci++) {
+      const c = comments[ci];
+      const globalIdx = diffReviewComments.indexOf(c);
+      html += `<div class="dr-comment-item">
+        <div class="dr-comment-item-header">
+          <span class="dr-comment-item-line">Line ${c.lineNumber}</span>
+          <span class="dr-comment-item-type type-${c.lineType}">${c.lineType === 'add' ? 'new' : c.lineType === 'remove' ? 'removed' : 'unchanged'}</span>
+          <button class="dr-comment-item-delete" onclick="deleteDrComment(${globalIdx})" title="Delete">✕</button>
+        </div>
+        <div class="dr-comment-item-code">${esc(c.lineContent)}</div>
+        <div class="dr-comment-item-text">${esc(c.comment)}</div>
+      </div>`;
+    }
+  }
+  body.innerHTML = html;
+}
+
+function deleteDrComment(idx) {
+  diffReviewComments.splice(idx, 1);
+  updateDrCommentsBadge();
+  renderDrCommentsBody();
+  // Re-render current file to update icons
+  if (diffReviewSelectedFile) selectDrFile(diffReviewSelectedFile);
+}
+
+function clearDrComments() {
+  if (diffReviewComments.length === 0) return;
+  if (!confirm(`Clear all ${diffReviewComments.length} comments?`)) return;
+  diffReviewComments = [];
+  updateDrCommentsBadge();
+  renderDrCommentsBody();
+  if (diffReviewSelectedFile) selectDrFile(diffReviewSelectedFile);
+}
+
+// --- Send to Copilot ---
+
+function sendDrComments() {
+  if (diffReviewComments.length === 0 || !diffReviewTermId) return;
+
+  // Build formatted message
+  const grouped = {};
+  for (const c of diffReviewComments) {
+    if (!grouped[c.filePath]) grouped[c.filePath] = [];
+    grouped[c.filePath].push(c);
+  }
+
+  let msg = 'I have the following review comments on the code changes:\n\n';
+  for (const [fp, comments] of Object.entries(grouped)) {
+    const fullPath = diffReviewCwd ? (diffReviewCwd.replace(/\\/g, '/') + '/' + fp) : fp;
+    msg += `## ${fullPath}\n\n`;
+    for (const c of comments) {
+      const typeLabel = c.lineType === 'add' ? 'new' : c.lineType === 'remove' ? 'removed' : 'unchanged';
+      msg += `**Line ${c.lineNumber}** (${typeLabel}):\n`;
+      msg += '```\n' + c.lineContent + '\n```\n';
+      msg += `Comment: ${c.comment}\n\n`;
+    }
+  }
+  msg += 'Please address these review comments.\n';
+
+  // Write to terminal
+  api.terminalWrite(diffReviewTermId, msg);
+
+  // Close diff review
+  closeDiffReview();
 }
 
 init();
