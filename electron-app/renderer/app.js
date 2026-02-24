@@ -2065,22 +2065,20 @@ async function sendDrComments() {
   }
   msg += 'Please address these review comments.\n';
 
-  // Write review to a temp file and use @filepath to send it to the CLI.
-  // This avoids multi-line input issues (newlines triggering premature submission).
+  // Paste the message using bracketed paste mode (terminal treats it as one block),
+  // then simulate pressing Enter after 1.5s delay.
   const termId = diffReviewTermId;
-  const reviewPath = await api.writeTempReview(msg);
+  const pasteStart = '\x1b[200~';
+  const pasteEnd = '\x1b[201~';
 
   // Close diff review first (restores terminal to normal view)
   closeDiffReview();
 
-  // Send as @file reference, then Enter after delay to submit
-  if (reviewPath) {
-    setTimeout(() => {
-      api.terminalWrite(termId, `@${reviewPath} please address these review comments`);
-      // Send Enter separately after 1.5s to allow CLI to process the input
-      setTimeout(() => { api.terminalWrite(termId, '\r'); }, 1500);
-    }, 300);
-  }
+  // Paste the content, then hit Enter after delay
+  setTimeout(() => {
+    api.terminalWrite(termId, pasteStart + msg + pasteEnd);
+    setTimeout(() => { api.terminalWrite(termId, '\r'); }, 1500);
+  }, 300);
 }
 
 init();
