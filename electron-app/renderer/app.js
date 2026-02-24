@@ -2065,8 +2065,8 @@ function sendDrComments() {
   }
   msg += 'Please address these review comments.\n';
 
-  // Write to terminal
-  api.terminalWrite(diffReviewTermId, msg);
+  // Write to terminal and auto-submit
+  api.terminalWrite(diffReviewTermId, msg + '\r');
 
   // Close diff review
   closeDiffReview();
