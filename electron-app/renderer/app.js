@@ -2073,10 +2073,12 @@ async function sendDrComments() {
   // Close diff review first (restores terminal to normal view)
   closeDiffReview();
 
-  // Send as @file reference + Enter to submit
+  // Send as @file reference, then Enter after delay to submit
   if (reviewPath) {
     setTimeout(() => {
-      api.terminalWrite(termId, `@${reviewPath} please address these review comments\r`);
+      api.terminalWrite(termId, `@${reviewPath} please address these review comments`);
+      // Send Enter separately after 1.5s to allow CLI to process the input
+      setTimeout(() => { api.terminalWrite(termId, '\r'); }, 1500);
     }, 300);
   }
 }
