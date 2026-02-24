@@ -1900,20 +1900,25 @@ function clickDrLine(lineEl, filePath, lineNumber, lineType) {
   const form = document.createElement('div');
   form.className = 'dr-comment-form';
   form.innerHTML = `
-    <button class="dr-btn-cancel" onclick="this.parentElement.remove()" title="Cancel">✕</button>
+    <button class="dr-btn-cancel" title="Cancel">✕</button>
     <input type="text" placeholder="Add a comment..." id="drCommentInput" autofocus>
-    <button class="dr-btn-submit" onclick="submitDrComment('${escJs(filePath)}', ${lineNumber}, '${escJs(content)}', '${lineType}')" title="Submit">⬆</button>
+    <button class="dr-btn-submit" title="Submit">⬆</button>
   `;
   lineEl.insertAdjacentElement('afterend', form);
   const input = form.querySelector('input');
+  const cancelBtn = form.querySelector('.dr-btn-cancel');
+  const submitBtn = form.querySelector('.dr-btn-submit');
+
+  cancelBtn.addEventListener('click', () => form.remove());
+  submitBtn.addEventListener('click', () => doSubmitDrComment(filePath, lineNumber, content, lineType));
   input.focus();
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') submitDrComment(filePath, lineNumber, content, lineType);
+    if (e.key === 'Enter') doSubmitDrComment(filePath, lineNumber, content, lineType);
     if (e.key === 'Escape') form.remove();
   });
 }
 
-function submitDrComment(filePath, lineNumber, lineContent, lineType) {
+function doSubmitDrComment(filePath, lineNumber, lineContent, lineType) {
   const input = document.getElementById('drCommentInput');
   if (!input) return;
   const comment = input.value.trim();
@@ -1934,8 +1939,9 @@ function submitDrComment(filePath, lineNumber, lineContent, lineType) {
     selectDrFile(filePath);
   }
 
-  // Expand comments panel
+  // Show and expand comments panel
   const panel = document.getElementById('drCommentsPanel');
+  panel.style.display = '';
   panel.classList.remove('collapsed');
   panel.querySelector('.dr-comments-header span:first-child').textContent = '▼';
 }
@@ -1948,9 +1954,19 @@ function updateDrCommentsBadge() {
   const badge = document.getElementById('drCommentBadge');
   badge.textContent = count;
   badge.style.display = count > 0 ? 'inline' : 'none';
-  // Update send button text
+  // Update send button
   const sendBtn = document.querySelector('.dr-comments-send');
-  if (sendBtn) sendBtn.textContent = `✈ Send ${count} to Copilot`;
+  if (sendBtn) {
+    sendBtn.textContent = `✈ Send ${count} Comment${count !== 1 ? 's' : ''}`;
+    sendBtn.disabled = count === 0;
+    sendBtn.style.opacity = count === 0 ? '0.4' : '1';
+    sendBtn.style.cursor = count === 0 ? 'not-allowed' : 'pointer';
+  }
+  // Hide comments panel entirely when 0 comments
+  const panel = document.getElementById('drCommentsPanel');
+  if (panel) {
+    panel.style.display = count > 0 ? '' : 'none';
+  }
 }
 
 function toggleDrCommentsPanel() {
