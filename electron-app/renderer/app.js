@@ -140,6 +140,33 @@ async function init() {
     console.log(`Terminal ${terminalId} exited with code ${exitCode}`);
     closeTerminal(terminalId);
   });
+  api.onTerminalSessionDetected(({ terminalId, sessionId }) => {
+    const t = terminals.get(terminalId);
+    if (t) {
+      t.sessionId = sessionId;
+      // Update tab label with session ID
+      const wrapper = document.getElementById(`terminal-${terminalId}`);
+      if (wrapper) {
+        const idSpan = wrapper.querySelector('.term-session-id');
+        if (idSpan) {
+          idSpan.textContent = sessionId;
+          idSpan.title = `Click to copy: ${sessionId}`;
+          idSpan.onclick = (e) => { e.stopPropagation(); navigator.clipboard.writeText(sessionId); };
+        } else {
+          // Insert session ID label into tab header
+          const header = wrapper.querySelector('.term-tab-header');
+          if (header) {
+            const span = document.createElement('span');
+            span.className = 'term-session-id';
+            span.title = `Click to copy: ${sessionId}`;
+            span.textContent = sessionId;
+            span.onclick = (e) => { e.stopPropagation(); navigator.clipboard.writeText(sessionId); };
+            header.insertBefore(span, header.querySelector('.term-tab-actions'));
+          }
+        }
+      }
+    }
+  });
   
   document.getElementById('refreshBtn').addEventListener('click', loadData);
   document.getElementById('addRepoBtn').addEventListener('click', addRepository);
@@ -246,7 +273,7 @@ async function init() {
     const saved = await api.getSavedTerminals();
     if (saved && saved.length > 0) {
       for (const st of saved) {
-        await openEmbeddedTerminal(st.cwd, st.sessionId, st.mission || null, st.color);
+        await openEmbeddedTerminal(st.cwd, st.sessionId || null, st.mission || null, st.color);
       }
       api.setSavedTerminals([]);
     }

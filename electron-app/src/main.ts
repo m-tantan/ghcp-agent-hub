@@ -646,6 +646,9 @@ app.whenReady().then(async () => {
     }
     mainWindow?.webContents.send('terminal-exit', event);
   });
+  terminalService.on('session-detected', (event: { terminalId: string; sessionId: string }) => {
+    mainWindow?.webContents.send('terminal-session-detected', event);
+  });
 
   // Forward file watcher events to renderer and send notifications
   fileWatcher.on('stateUpdate', (update: StateUpdate) => {
@@ -724,11 +727,10 @@ app.on('before-quit', () => {
   const activeTerminals = terminalService.getActiveTerminalDetails();
   const colors = configService.getAllTerminalColors();
   const savedTerminals = activeTerminals
-    .filter((t: any) => t.sessionId)
     .map((t: any) => ({
-      sessionId: t.sessionId,
+      sessionId: t.sessionId || undefined,
       cwd: t.cwd,
-      color: colors[t.sessionId] || undefined,
+      color: (t.sessionId ? colors[t.sessionId] : undefined) || undefined,
       mission: t.mission || undefined,
     }));
   configService.setSavedTerminals(savedTerminals);

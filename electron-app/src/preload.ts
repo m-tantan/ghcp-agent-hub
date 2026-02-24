@@ -106,4 +106,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTerminalExit: (callback: (event: { terminalId: string; exitCode: number }) => void) => {
     ipcRenderer.on('terminal-exit', (_event, data) => callback(data));
   },
+  onTerminalSessionDetected: (callback: (event: { terminalId: string; sessionId: string }) => void) => {
+    ipcRenderer.on('terminal-session-detected', (_event, data) => callback(data));
+  },
 });

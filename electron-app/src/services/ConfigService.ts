@@ -33,7 +33,7 @@ export interface AppConfig {
 }
 
 export interface SavedTerminal {
-  sessionId: string;
+  sessionId?: string;
   cwd: string;
   color?: string;
   mission?: string;

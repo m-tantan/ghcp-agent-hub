@@ -10,6 +10,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
 
+const fsPromises = fs.promises;
+
 // Try to load node-pty, but handle if it's not available
 let pty: any = null;
 try {
@@ -30,10 +32,13 @@ export class TerminalService extends EventEmitter {
   private terminals: Map<string, TerminalSession> = new Map();
   private shell: string;
   private _isAvailable: boolean;
+  private sessionStatePath: string;
 
   constructor() {
     super();
     this._isAvailable = pty !== null;
+    const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
+    this.sessionStatePath = path.join(home, '.copilot', 'session-state');
     // Determine shell based on platform - prefer pwsh over powershell.exe
     if (process.platform === 'win32') {
       const pwshPath = process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'PowerShell', '7', 'pwsh.exe') : null;
@@ -53,7 +58,7 @@ export class TerminalService extends EventEmitter {
   /**
    * Create a new terminal session
    */
-  createTerminal(
+  async createTerminal(
     terminalId: string,
     cwd: string,
     copilotPath?: string,
@@ -61,7 +66,7 @@ export class TerminalService extends EventEmitter {
     mission?: string,
     copilotCommand?: string,
     skipCopilot?: boolean
-  ): string | null {
+  ): Promise<string | null> {
     if (!pty) {
       console.error('Cannot create terminal: node-pty not available');
       return null;
@@ -140,6 +145,14 @@ export class TerminalService extends EventEmitter {
 
     // Start copilot unless explicitly skipped (blank terminal)
     if (skipCopilot) return terminalId;
+
+    // Snapshot existing sessions before starting copilot (for detection of new sessions)
+    const isNewSession = !copilotSessionId;
+    let sessionSnapshot: Set<string> | null = null;
+    if (isNewSession) {
+      sessionSnapshot = await this.snapshotSessionDirs();
+    }
+
     setTimeout(() => {
       const isGh = copilotCommand === 'gh copilot';
       let baseCmd: string;
@@ -159,6 +172,11 @@ export class TerminalService extends EventEmitter {
         command = `${baseCmd}\r`;
       }
       ptyProcess.write(command);
+
+      // Start detecting the session ID for new sessions
+      if (isNewSession && sessionSnapshot) {
+        this.detectSessionForTerminal(terminalId, safeCwd, sessionSnapshot);
+      }
     }, 500);
 
     return terminalId;
@@ -228,5 +246,91 @@ export class TerminalService extends EventEmitter {
     for (const [id] of this.terminals) {
       this.destroyTerminal(id);
     }
+  }
+
+  /**
+   * Snapshot current session directories for later diff
+   */
+  private async snapshotSessionDirs(): Promise<Set<string>> {
+    try {
+      const entries = await fsPromises.readdir(this.sessionStatePath);
+      return new Set(entries.filter(e => this.isValidUUID(e)));
+    } catch {
+      return new Set();
+    }
+  }
+
+  /**
+   * Detect the session ID for a terminal started without one.
+   * Polls for new session directories and matches by cwd.
+   */
+  private async detectSessionForTerminal(
+    terminalId: string,
+    cwd: string,
+    snapshot: Set<string>
+  ): Promise<void> {
+    const normalizedCwd = cwd.replace(/\\/g, '/').toLowerCase();
+    const maxAttempts = 5;
+    const pollIntervalMs = 2000;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+
+      // Terminal may have been destroyed while waiting
+      if (!this.terminals.has(terminalId)) return;
+
+      try {
+        const currentEntries = await fsPromises.readdir(this.sessionStatePath);
+        const newDirs = currentEntries.filter(e => this.isValidUUID(e) && !snapshot.has(e));
+
+        for (const sessionId of newDirs) {
+          const workspaceFile = path.join(this.sessionStatePath, sessionId, 'workspace.yaml');
+          const metadata = this.readWorkspaceYaml(workspaceFile);
+          if (!metadata?.cwd) continue;
+
+          const sessionCwd = metadata.cwd.replace(/\\/g, '/').toLowerCase();
+          if (sessionCwd === normalizedCwd) {
+            // Match found — update terminal
+            const session = this.terminals.get(terminalId);
+            if (session) {
+              session.sessionId = sessionId;
+              console.log(`[TerminalService] Detected session ${sessionId} for terminal ${terminalId}`);
+              this.emit('session-detected', { terminalId, sessionId });
+            }
+            return;
+          }
+        }
+      } catch {
+        // Ignore filesystem errors, try again
+      }
+    }
+
+    console.log(`[TerminalService] Session detection timed out for terminal ${terminalId}`);
+  }
+
+  /**
+   * Read workspace.yaml for session detection
+   */
+  private readWorkspaceYaml(filePath: string): { cwd?: string } | undefined {
+    try {
+      if (!fs.existsSync(filePath)) return undefined;
+      const content = fs.readFileSync(filePath, 'utf-8');
+      for (const line of content.split('\n')) {
+        const colonIndex = line.indexOf(':');
+        if (colonIndex > 0) {
+          const key = line.substring(0, colonIndex).trim();
+          if (key === 'cwd') {
+            return { cwd: line.substring(colonIndex + 1).trim() };
+          }
+        }
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private isValidUUID(str: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
   }
 }
