@@ -2042,7 +2042,7 @@ function clearDrComments() {
 
 // --- Send to Copilot ---
 
-function sendDrComments() {
+async function sendDrComments() {
   if (diffReviewComments.length === 0 || !diffReviewTermId) return;
 
   // Build formatted message
@@ -2065,21 +2065,20 @@ function sendDrComments() {
   }
   msg += 'Please address these review comments.\n';
 
-  // Use bracketed paste mode so the CLI treats the entire multi-line
-  // message as a single paste (newlines won't trigger premature submission).
-  // Then send Enter separately after a short delay to submit.
-  const pasteStart = '\x1b[200~';
-  const pasteEnd = '\x1b[201~';
+  // Write review to a temp file and use @filepath to send it to the CLI.
+  // This avoids multi-line input issues (newlines triggering premature submission).
   const termId = diffReviewTermId;
-  api.terminalWrite(termId, pasteStart + msg + pasteEnd);
+  const reviewPath = await api.writeTempReview(msg);
 
   // Close diff review first (restores terminal to normal view)
   closeDiffReview();
 
-  // Submit after a short delay
-  setTimeout(() => {
-    api.terminalWrite(termId, '\r');
-  }, 300);
+  // Send as @file reference + Enter to submit
+  if (reviewPath) {
+    setTimeout(() => {
+      api.terminalWrite(termId, `@${reviewPath} please address these review comments\r`);
+    }, 300);
+  }
 }
 
 init();

@@ -361,6 +361,16 @@ function setupIPC(): void {
     return filePath;
   });
 
+  // Write review comments to a temp file and return the path
+  ipcMain.handle('write-temp-review', async (_event, content: string) => {
+    const tmpDir = app.getPath('temp');
+    const fileName = `copilot-review-${Date.now()}.md`;
+    const filePath = path.join(tmpDir, fileName);
+    const fs = await import('fs');
+    fs.writeFileSync(filePath, content, 'utf-8');
+    return filePath;
+  });
+
   // === EMBEDDED TERMINAL ===
   
   // Create embedded terminal
