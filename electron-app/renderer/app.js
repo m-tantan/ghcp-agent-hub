@@ -2072,13 +2072,13 @@ async function sendDrComments() {
   // Close diff review first (restores terminal to normal view)
   closeDiffReview();
 
-  // Type the @file reference as text, then press Enter after 1.5s
+  // Paste the @file reference into the terminal. User presses Enter to send.
   setTimeout(() => {
     const text = `@${reviewPath} please address these review comments`;
     api.terminalWrite(termId, text);
-    setTimeout(() => {
-      api.terminalWrite(termId, '\r');
-    }, 1500);
+    // Focus the terminal so user can immediately press Enter
+    const t = terminals.get(termId);
+    if (t) setTimeout(() => t.term.focus(), 200);
   }, 500);
 }
 
