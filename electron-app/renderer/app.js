@@ -2065,11 +2065,21 @@ function sendDrComments() {
   }
   msg += 'Please address these review comments.\n';
 
-  // Write to terminal and auto-submit
-  api.terminalWrite(diffReviewTermId, msg + '\r');
+  // Use bracketed paste mode so the CLI treats the entire multi-line
+  // message as a single paste (newlines won't trigger premature submission).
+  // Then send Enter separately after a short delay to submit.
+  const pasteStart = '\x1b[200~';
+  const pasteEnd = '\x1b[201~';
+  const termId = diffReviewTermId;
+  api.terminalWrite(termId, pasteStart + msg + pasteEnd);
 
-  // Close diff review
+  // Close diff review first (restores terminal to normal view)
   closeDiffReview();
+
+  // Submit after a short delay
+  setTimeout(() => {
+    api.terminalWrite(termId, '\r');
+  }, 300);
 }
 
 init();
