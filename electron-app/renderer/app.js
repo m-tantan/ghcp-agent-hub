@@ -1778,6 +1778,13 @@ function closeDiffReview() {
   document.getElementById('drFileName').textContent = 'Select a file';
 }
 
+function toggleDrWrap() {
+  const content = document.getElementById('drFileContent');
+  const btn = document.getElementById('drWrapToggle');
+  content.classList.toggle('nowrap');
+  btn.classList.toggle('active');
+}
+
 async function loadDiffReviewData() {
   if (!diffReviewCwd) return;
   const diff = await api.getDiff(diffReviewCwd, diffReviewMode);
