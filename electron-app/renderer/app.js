@@ -2065,20 +2065,21 @@ async function sendDrComments() {
   }
   msg += 'Please address these review comments.\n';
 
-  // Paste the message using bracketed paste mode (terminal treats it as one block),
-  // then simulate pressing Enter after 1.5s delay.
+  // Write to temp file, then reference it with @filepath (single-line input).
   const termId = diffReviewTermId;
-  const pasteStart = '\x1b[200~';
-  const pasteEnd = '\x1b[201~';
+  const reviewPath = await api.writeTempReview(msg);
 
   // Close diff review first (restores terminal to normal view)
   closeDiffReview();
 
-  // Paste the content, then hit Enter after delay
+  // Type the @file reference as text, then press Enter after 1.5s
   setTimeout(() => {
-    api.terminalWrite(termId, pasteStart + msg + pasteEnd);
-    setTimeout(() => { api.terminalWrite(termId, '\r'); }, 1500);
-  }, 300);
+    const text = `@${reviewPath} please address these review comments`;
+    api.terminalWrite(termId, text);
+    setTimeout(() => {
+      api.terminalWrite(termId, '\r');
+    }, 1500);
+  }, 500);
 }
 
 init();
