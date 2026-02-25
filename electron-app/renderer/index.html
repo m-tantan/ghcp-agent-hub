@@ -22,28 +22,31 @@
     </div>
     <div class="main-content">
       <header>
-        <div class="stats-bar">
-          <button class="sidebar-toggle hidden" id="sidebarToggleHeader" title="Show sidebar">☰</button>
-          <div class="stat"><div class="stat-value" id="totalSessions">-</div><div class="stat-label">Sessions</div></div>
-          <div class="stat"><div class="stat-value" id="activeSessions">-</div><div class="stat-label">Active</div></div>
-          <div class="stat"><div class="stat-value" id="repoCount">-</div><div class="stat-label">Repos</div></div>
-          <div class="filter-group">
-            <span class="filter-label">Filter:</span>
-            <button class="filter-btn active" data-filter="all" title="Show all sessions">All</button>
-            <button class="filter-btn" data-filter="active" title="Show only active/running sessions">🟢 Active</button>
-          </div>
-        </div>
+        <button class="sidebar-toggle hidden" id="sidebarToggleHeader" title="Show sidebar">☰</button>
         <input type="text" id="searchInput" placeholder="Search sessions...">
-        <div class="date-range-filter">
-          <input type="date" id="dateFrom" title="From date">
-          <span class="date-sep">→</span>
-          <input type="date" id="dateTo" title="To date">
-          <button id="clearDateRangeBtn" title="Clear date filter">✕</button>
-        </div>
-        <button id="statsBtn" style="margin-left:8px" title="Activity Stats">📊 Stats</button>
-        <div class="view-toggle">
-          <button id="viewTileBtn" class="active" title="Tile view" onclick="setSessionViewMode('tile')">⊞</button>
-          <button id="viewListBtn" title="List view" onclick="setSessionViewMode('list')">☰</button>
+        <button class="header-hamburger" id="headerHamburger" title="More options">☰</button>
+        <div class="header-collapsible" id="headerCollapsible">
+          <div class="stats-bar">
+            <div class="stat"><div class="stat-value" id="totalSessions">-</div><div class="stat-label">Sessions</div></div>
+            <div class="stat"><div class="stat-value" id="activeSessions">-</div><div class="stat-label">Active</div></div>
+            <div class="stat"><div class="stat-value" id="repoCount">-</div><div class="stat-label">Repos</div></div>
+            <div class="filter-group">
+              <span class="filter-label">Filter:</span>
+              <button class="filter-btn active" data-filter="all" title="Show all sessions">All</button>
+              <button class="filter-btn" data-filter="active" title="Show only active/running sessions">🟢 Active</button>
+            </div>
+          </div>
+          <div class="date-range-filter">
+            <input type="date" id="dateFrom" title="From date">
+            <span class="date-sep">→</span>
+            <input type="date" id="dateTo" title="To date">
+            <button id="clearDateRangeBtn" title="Clear date filter">✕</button>
+          </div>
+          <button id="statsBtn" style="margin-left:8px" title="Activity Stats">📊 Stats</button>
+          <div class="view-toggle">
+            <button id="viewTileBtn" class="active" title="Tile view" onclick="setSessionViewMode('tile')">⊞</button>
+            <button id="viewListBtn" title="List view" onclick="setSessionViewMode('list')">☰</button>
+          </div>
         </div>
       </header>
       <main id="content"><div class="loading"><div class="spinner"></div></div></main>

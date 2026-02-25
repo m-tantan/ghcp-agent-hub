@@ -183,6 +183,18 @@ async function init() {
   document.getElementById('sidebarCollapseBtn').addEventListener('click', collapseSidebar);
   document.getElementById('sidebarToggle').addEventListener('click', expandSidebar);
   document.getElementById('sidebarToggleHeader').addEventListener('click', expandSidebar);
+  // Header hamburger menu
+  document.getElementById('headerHamburger').addEventListener('click', () => {
+    document.getElementById('headerCollapsible').classList.toggle('open');
+  });
+  document.addEventListener('click', e => {
+    const collapsible = document.getElementById('headerCollapsible');
+    if (collapsible.classList.contains('dropdown') && collapsible.classList.contains('open') &&
+        !e.target.closest('#headerCollapsible') && !e.target.closest('#headerHamburger')) {
+      collapsible.classList.remove('open');
+    }
+  });
+  initHeaderResponsive();
   document.getElementById('cancelWorktreeBtn').addEventListener('click', () => document.getElementById('worktreeModal').classList.remove('show'));
   document.getElementById('createWorktreeBtn').addEventListener('click', createWorktree);
   document.getElementById('cancelRenameBtn').addEventListener('click', () => document.getElementById('renameModal').classList.remove('show'));
@@ -326,11 +338,32 @@ async function loadData() {
   render();
 }
 
-function render() { renderSidebar(); renderSessions(); updateStats(); }
-function updateStats() {
-  document.getElementById('totalSessions').textContent = sessions.length;
-  // Count active sessions based on real-time states
-  const activeCount = sessions.filter(s => {
+function render() { renderSidebar(); renderSessions(); }
+function getFilteredSessions() {
+  let f = searchQuery ? sessions.filter(s => ((s.summary||'')+(s.firstMessage||'')+s.branchName+s.id+(sessionNames[s.id]||'')).toLowerCase().includes(searchQuery)) : sessions;
+  if (currentFilter === 'active') {
+    f = f.filter(s => {
+      const state = sessionStates.get(s.id);
+      if (state?.status) {
+        const t = state.status.type;
+        return t === 'thinking' || t === 'executingTool' || t === 'awaitingApproval';
+      }
+      return s.isActive;
+    });
+  }
+  if (dateFrom || dateTo) {
+    f = f.filter(s => {
+      const t = new Date(s.lastActivityAt).getTime();
+      if (dateFrom && t < dateFrom.getTime()) return false;
+      if (dateTo && t > dateTo.getTime()) return false;
+      return true;
+    });
+  }
+  return f;
+}
+function updateStats(filtered) {
+  document.getElementById('totalSessions').textContent = filtered.length;
+  const activeCount = filtered.filter(s => {
     const state = sessionStates.get(s.id);
     if (state?.status) {
       const t = state.status.type;
@@ -339,7 +372,8 @@ function updateStats() {
     return s.isActive;
   }).length;
   document.getElementById('activeSessions').textContent = activeCount;
-  document.getElementById('repoCount').textContent = repositories.length;
+  const uniqueRepos = new Set(filtered.map(s => s.projectPath));
+  document.getElementById('repoCount').textContent = uniqueRepos.size;
 }
 
 function renderSidebar() {
@@ -385,28 +419,8 @@ function setSessionViewMode(mode) {
 
 function renderSessions() {
   const el = document.getElementById('content');
-  // Apply search filter (include custom session names)
-  let f = searchQuery ? sessions.filter(s => ((s.summary||'')+(s.firstMessage||'')+s.branchName+s.id+(sessionNames[s.id]||'')).toLowerCase().includes(searchQuery)) : sessions;
-  // Apply status filter
-  if (currentFilter === 'active') {
-    f = f.filter(s => {
-      const state = sessionStates.get(s.id);
-      if (state?.status) {
-        const t = state.status.type;
-        return t === 'thinking' || t === 'executingTool' || t === 'awaitingApproval';
-      }
-      return s.isActive;
-    });
-  }
-  // Apply date range filter
-  if (dateFrom || dateTo) {
-    f = f.filter(s => {
-      const t = new Date(s.lastActivityAt).getTime();
-      if (dateFrom && t < dateFrom.getTime()) return false;
-      if (dateTo && t > dateTo.getTime()) return false;
-      return true;
-    });
-  }
+  const f = getFilteredSessions();
+  updateStats(f);
   if (!f.length) { el.innerHTML = `<div class="empty-state"><h2>${searchQuery || currentFilter !== 'all' || dateFrom || dateTo ?'No matches':'No Sessions'}</h2><p style="color:#666;margin-top:8px">${currentFilter === 'active' ? 'No active sessions found' : (dateFrom || dateTo) ? 'No sessions in selected date range' : ''}</p></div>`; return; }
   
   if (sessionViewMode === 'list') {
@@ -420,10 +434,11 @@ function renderSessions() {
       return `
       <div class="session-list-row" data-session-id="${s.id}">
         <span class="session-status ${statusClass}" style="font-size:10px;">${statusText}</span>
-        <span class="session-list-name" title="${esc(s.summary||s.firstMessage||'')}">${esc(displayName)}</span>
+        <span class="session-list-name" title="${esc(s.summary||s.firstMessage||'')}">${esc(displayName)}${s.summary||s.firstMessage ? `<span class="session-list-summary">${esc((s.summary||s.firstMessage||'').slice(0,80))}${(s.summary||s.firstMessage||'').length>80?'…':''}</span>` : ''}</span>
         <span class="session-list-meta"><span class="branch-badge">${esc(s.branchName)}</span><span>📝 ${s.messageCount}</span><span>⏱️ ${timeAgo(new Date(s.lastActivityAt))}</span></span>
         <span class="session-list-actions">
           <button onclick="viewActivity('${s.id}')" title="Activity">📊</button>
+          <button onclick="viewDiff('${escJs(s.projectPath)}')" title="Changes">📝</button>
           <button onclick="resumeSess('${s.id}','${escJs(s.projectPath)}')" title="Resume">▶</button>
         </span>
       </div>`;
@@ -900,7 +915,7 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
       <button class="terminal-instance-maximize" onclick="toggleMaximizeTerminal('${termId}')" title="Maximize">&#x26F6;</button>
       <span class="terminal-instance-label" title="${esc(cwd)}">${nameHtml}${folderHtml} ${sessionLabel}</span>
     </div>
-    <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;pointer-events:auto;">
+    <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;pointer-events:none;">
       ${nameDisplayHtml}
     </div>
     <div style="display:flex;align-items:center;flex-shrink:0;">
@@ -1215,6 +1230,26 @@ async function openBlankTerminal() {
   } else {
     alert('Please add a repository first');
   }
+}
+
+// Responsive header — collapse into hamburger when header overflows
+function initHeaderResponsive() {
+  const header = document.querySelector('header');
+  const hamburger = document.getElementById('headerHamburger');
+  const collapsible = document.getElementById('headerCollapsible');
+  function checkOverflow() {
+    // Temporarily show inline to measure
+    collapsible.classList.remove('dropdown', 'open');
+    hamburger.style.display = 'none';
+    const overflow = header.scrollWidth > header.clientWidth;
+    if (overflow) {
+      collapsible.classList.add('dropdown');
+      hamburger.style.display = 'flex';
+    }
+  }
+  const ro = new ResizeObserver(() => checkOverflow());
+  ro.observe(header);
+  checkOverflow();
 }
 
 // Window resize handler — throttled to 100ms

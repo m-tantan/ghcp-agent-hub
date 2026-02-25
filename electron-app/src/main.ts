@@ -48,13 +48,6 @@ function createWindow(): void {
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
-  // Disable Ctrl+R and Ctrl+Shift+R to prevent accidental reload that kills terminals
-  mainWindow.webContents.on('before-input-event', (event, input) => {
-    if (input.key.toLowerCase() === 'r' && input.control && input.type === 'keyDown') {
-      event.preventDefault();
-    }
-  });
-
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -702,6 +695,13 @@ app.whenReady().then(async () => {
   createWindow();
   createTray();
   setupAutoUpdater();
+
+  // Prevent Chromium from consuming Ctrl+R (reload) so the renderer can use it for memo editing
+  mainWindow!.webContents.on('before-input-event', (_event, input) => {
+    if (input.control && !input.shift && input.key.toLowerCase() === 'r') {
+      _event.preventDefault();
+    }
+  });
 
   // Dev mode: watch renderer files for auto-reload
   if (!app.isPackaged) {
