@@ -822,12 +822,14 @@ function updateTerminalGrid() {
   const cols = Math.min(count || 1, terminalsPerRow);
   const rows = Math.max(1, Math.ceil(count / cols));
   container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  container.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
   // Update count labels
   const countEl = document.getElementById('terminalCount');
   if (countEl) countEl.textContent = count > 0 ? `(${count})` : '';
   const countMin = document.getElementById('terminalCountMin');
   if (countMin) countMin.textContent = count > 0 ? `(${count} open)` : '';
+  // Refit all terminals to fill their new grid cells
+  setTimeout(() => terminals.forEach(t => t.fitAddon.fit()), 50);
 }
 
 async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initialColor = null, blank = false) {

@@ -732,11 +732,12 @@ main { flex: 1; overflow: auto; padding: 24px; }
 
 .terminal-container { flex: 1; overflow: hidden; display: grid; gap: 2px; padding: 2px; background: rgba(255,255,255,0.03); }
 .terminal-instance {
-  display: block; background: #0d1117;
+  display: flex; flex-direction: column; background: #0d1117;
   overflow: hidden; position: relative;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   transition: border-color 0.2s var(--ease);
+  min-height: 0;
 }
 .terminal-instance:hover { border-color: var(--border-default); }
 .terminal-instance .xterm { height: 100%; padding: 4px; }
