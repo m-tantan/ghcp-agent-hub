@@ -53,13 +53,18 @@ export class CLISessionMonitorService extends EventEmitter {
     for (const saved of savedRepos) {
       // Only restore if the path still exists
       if (fs.existsSync(saved.path)) {
-        await this.addRepository(saved.path, false); // Don't save during load
+        await this.addRepository(saved.path, false, true); // Skip refresh per repo
         // Restore isExpanded state
         const repo = this.selectedRepositories.find(r => r.path === saved.path);
         if (repo) {
           repo.isExpanded = saved.isExpanded;
         }
       }
+    }
+
+    // Single bulk refresh after all repos are added
+    if (this.selectedRepositories.length > 0) {
+      await this.refreshSessions();
     }
 
     if (savedRepos.length > 0) {
@@ -96,7 +101,7 @@ export class CLISessionMonitorService extends EventEmitter {
   /**
    * Add a repository to monitor
    */
-  async addRepository(repoPath: string, persist: boolean = true): Promise<SelectedRepository | undefined> {
+  async addRepository(repoPath: string, persist: boolean = true, skipRefresh: boolean = false): Promise<SelectedRepository | undefined> {
     if (this.selectedRepositories.some(r => r.path === repoPath)) {
       return this.selectedRepositories.find(r => r.path === repoPath);
     }
@@ -110,7 +115,9 @@ export class CLISessionMonitorService extends EventEmitter {
     };
 
     this.selectedRepositories.push(repository);
-    await this.refreshSessions();
+    if (!skipRefresh) {
+      await this.refreshSessions();
+    }
 
     if (persist) {
       this.saveRepositories();

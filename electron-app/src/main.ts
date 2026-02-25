@@ -37,6 +37,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    show: false,
     title: 'GHCP Agent Hub',
     icon: path.join(__dirname, '..', 'assets', 'icon_512.png'),
     webPreferences: {
@@ -47,6 +48,10 @@ function createWindow(): void {
   });
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -468,6 +473,19 @@ function setupIPC(): void {
     configService.setStartCommand(command);
   });
 
+  // Batched init data (single round-trip for renderer init)
+  ipcMain.handle('get-init-data', () => {
+    return {
+      terminalAvailable: terminalService.isAvailable(),
+      filter: configService.loadFilter(),
+      sessionNames: configService.getAllSessionNames(),
+      repoColors: configService.getAllRepoColors(),
+      sessionViewMode: configService.getSessionViewMode(),
+      terminalOnlyMode: configService.getTerminalOnlyMode(),
+      startCommand: configService.getStartCommand(),
+    };
+  });
+
   // === GIT DIFF & CODE CHANGES ===
 
   // Get code changes for a working directory
@@ -701,10 +719,7 @@ app.whenReady().then(async () => {
 
   setupIPC();
   
-  // Load saved repositories from config BEFORE creating window
-  await monitorService.loadSavedRepositories();
-  console.log(`Restored ${monitorService.getSelectedRepositories().length} repositories from config`);
-  
+  // Create window and tray FIRST for fast perceived startup
   createWindow();
   createTray();
   setupAutoUpdater();
@@ -714,6 +729,11 @@ app.whenReady().then(async () => {
     if (input.control && !input.shift && input.key.toLowerCase() === 'r') {
       _event.preventDefault();
     }
+  });
+
+  // Load saved repositories in background AFTER window is visible
+  monitorService.loadSavedRepositories().then(() => {
+    console.log(`Restored ${monitorService.getSelectedRepositories().length} repositories from config`);
   });
 
   // Dev mode: watch renderer files for auto-reload
@@ -730,12 +750,6 @@ app.whenReady().then(async () => {
     });
     console.log('[dev] Watching renderer for changes');
   }
-
-  // Initial session scan and tray stats update
-  monitorService.scanAllSessions().then((sessions) => {
-    console.log(`Found ${sessions.length} Copilot sessions`);
-    updateTrayStats(sessions);
-  });
 });
 
 app.on('window-all-closed', () => {

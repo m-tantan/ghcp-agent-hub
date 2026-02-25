@@ -12,14 +12,6 @@ import { EventEmitter } from 'events';
 
 const fsPromises = fs.promises;
 
-// Try to load node-pty, but handle if it's not available
-let pty: any = null;
-try {
-  pty = require('node-pty');
-} catch (e) {
-  console.warn('node-pty not available - embedded terminal disabled. Install Spectre-mitigated libraries in Visual Studio to enable.');
-}
-
 export interface TerminalSession {
   id: string;
   ptyProcess: any; // pty.IPty when available
@@ -30,29 +22,45 @@ export interface TerminalSession {
 
 export class TerminalService extends EventEmitter {
   private terminals: Map<string, TerminalSession> = new Map();
-  private shell: string;
-  private _isAvailable: boolean;
   private sessionStatePath: string;
+
+  private _pty: any = undefined;
+  private getPty(): any {
+    if (this._pty === undefined) {
+      try {
+        this._pty = require('node-pty');
+      } catch (e) {
+        console.warn('node-pty not available - embedded terminal disabled.');
+        this._pty = null;
+      }
+    }
+    return this._pty;
+  }
+
+  private _shell: string | null = null;
+  private getShell(): string {
+    if (!this._shell) {
+      if (process.platform === 'win32') {
+        const pwshPath = process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'PowerShell', '7', 'pwsh.exe') : null;
+        this._shell = (pwshPath && fs.existsSync(pwshPath)) ? pwshPath : 'powershell.exe';
+      } else {
+        this._shell = process.env.SHELL || '/bin/bash';
+      }
+    }
+    return this._shell;
+  }
 
   constructor() {
     super();
-    this._isAvailable = pty !== null;
     const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
     this.sessionStatePath = path.join(home, '.copilot', 'session-state');
-    // Determine shell based on platform - prefer pwsh over powershell.exe
-    if (process.platform === 'win32') {
-      const pwshPath = process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'PowerShell', '7', 'pwsh.exe') : null;
-      this.shell = (pwshPath && fs.existsSync(pwshPath)) ? pwshPath : 'powershell.exe';
-    } else {
-      this.shell = process.env.SHELL || '/bin/bash';
-    }
   }
 
   /**
    * Check if terminal service is available
    */
   isAvailable(): boolean {
-    return this._isAvailable;
+    return this.getPty() !== null;
   }
 
   /**
@@ -68,6 +76,7 @@ export class TerminalService extends EventEmitter {
     skipCopilot?: boolean,
     customStartCommand?: string
   ): Promise<string | null> {
+    const pty = this.getPty();
     if (!pty) {
       console.error('Cannot create terminal: node-pty not available');
       return null;
@@ -97,7 +106,7 @@ export class TerminalService extends EventEmitter {
     try {
       console.log(`Creating terminal in: ${safeCwd}`);
       const shellArgs = process.platform === 'win32' ? ['-NoProfile', '-NoLogo'] : [];
-      ptyProcess = pty.spawn(this.shell, shellArgs, {
+      ptyProcess = pty.spawn(this.getShell(), shellArgs, {
         name: 'xterm-256color',
         cols,
         rows,
@@ -110,7 +119,7 @@ export class TerminalService extends EventEmitter {
       console.warn(`pty.spawn failed for ${safeCwd}: ${err.message}. Retrying with ${fallbackCwd}`);
       try {
         const shellArgs = process.platform === 'win32' ? ['-NoProfile', '-NoLogo'] : [];
-        ptyProcess = pty.spawn(this.shell, shellArgs, {
+        ptyProcess = pty.spawn(this.getShell(), shellArgs, {
           name: 'xterm-256color',
           cols,
           rows,

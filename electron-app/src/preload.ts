@@ -73,6 +73,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Start command
   getStartCommand: () => ipcRenderer.invoke('get-start-command'),
   setStartCommand: (command: string) => ipcRenderer.invoke('set-start-command', command),
+
+  // Batched init data
+  getInitData: () => ipcRenderer.invoke('get-init-data'),
   
   // Worktree management
   createWorktree: (repoPath: string, branchName: string, baseBranch: string) =>

@@ -96,30 +96,21 @@ function getWorktreeShade(baseColor, worktreeIndex, totalWorktrees) {
 }
 
 async function init() {
-  // Check if embedded terminal is available
-  embeddedTerminalAvailable = await api.terminalAvailable();
+  // Load all config in a single IPC round-trip
+  const initData = await api.getInitData();
+  embeddedTerminalAvailable = initData.terminalAvailable;
   if (!embeddedTerminalAvailable) {
     console.log('Embedded terminal not available - will use external terminals');
   }
-  
-  // Load saved filter first (sanitize legacy 'intervention' value)
-  currentFilter = await api.getFilter() || 'all';
+  currentFilter = initData.filter || 'all';
   if (currentFilter === 'intervention') currentFilter = 'all';
   updateFilterButtons();
-  
-  // Load session names
-  sessionNames = await api.getAllSessionNames() || {};
-  
-  // Load repo colors
-  repoColors = await api.getAllRepoColors() || {};
-  
-  // Load session view mode
-  sessionViewMode = await api.getSessionViewMode() || 'tile';
+  sessionNames = initData.sessionNames || {};
+  repoColors = initData.repoColors || {};
+  sessionViewMode = initData.sessionViewMode || 'tile';
   document.getElementById(sessionViewMode === 'list' ? 'viewListBtn' : 'viewTileBtn').classList.add('active');
   document.getElementById(sessionViewMode === 'list' ? 'viewTileBtn' : 'viewListBtn').classList.remove('active');
-  
-  // Load terminal-only mode
-  terminalOnlyMode = await api.getTerminalOnlyMode() || false;
+  terminalOnlyMode = initData.terminalOnlyMode || false;
   if (terminalOnlyMode) applyTerminalOnlyMode();
   
   await loadData();
@@ -303,9 +294,9 @@ async function init() {
   if (embeddedTerminalAvailable) {
     const saved = await api.getSavedTerminals();
     if (saved && saved.length > 0) {
-      for (const st of saved) {
-        await openEmbeddedTerminal(st.cwd, st.sessionId || null, st.mission || null, st.color);
-      }
+      await Promise.all(saved.map(st =>
+        openEmbeddedTerminal(st.cwd, st.sessionId || null, st.mission || null, st.color)
+      ));
       api.setSavedTerminals([]);
     }
   }
