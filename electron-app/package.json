@@ -20,7 +20,7 @@
     "directories": {
       "output": "release"
     },
-    "icon": "assets/icon_512.png",
+    "icon": "assets/icon.ico",
     "files": [
       "dist/**/*",
       "renderer/**/*",

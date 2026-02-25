@@ -2,8 +2,6 @@
 
 Manage all sessions in GitHub Copilot CLI. Easily create new worktrees, run multiple terminals in parallel, preview edits before accepting them, make inline changes directly from diffs, and more.
 
-This is a GitHub Copilot CLI adaptation of [AgentHub](https://github.com/jamesrochabrun/AgentHub), originally built for Claude Code.
-
 ## Features
 
 - **Works immediately** - No setup required, works with your GitHub Copilot CLI
@@ -17,7 +15,7 @@ This is a GitHub Copilot CLI adaptation of [AgentHub](https://github.com/jamesro
 
 ## Requirements
 
-- macOS 14.0+
+- Windows 10+ or macOS 14+
 - [GitHub Copilot CLI](https://github.com/features/copilot) installed and authenticated
 
 ## Session Data
@@ -38,15 +36,6 @@ GHCP-Agent-Hub reads GitHub Copilot CLI session data from:
 | Awaiting Approval | Tool requires user confirmation |
 | Waiting for User | Awaiting input |
 | Idle | Session inactive |
-
-## Differences from Claude Code AgentHub
-
-| Aspect | Claude Code AgentHub | GHCP-Agent-Hub |
-|--------|---------------------|----------------|
-| Session Path | `~/.claude/projects/{encoded-path}/{sessionId}.jsonl` | `~/.copilot/session-state/{sessionId}/events.jsonl` |
-| Metadata | Embedded in JSONL | Separate `workspace.yaml` file |
-| CLI Command | `claude` | `gh copilot` |
-| Event Format | `{type, message, timestamp}` | `{type, data, id, timestamp, parentId}` |
 
 ## Privacy
 

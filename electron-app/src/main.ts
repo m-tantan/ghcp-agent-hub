@@ -71,7 +71,11 @@ interface TraySessionStats {
 let currentTrayStats: TraySessionStats = { total: 0, active: 0, needingInput: 0 };
 
 function createTray(): void {
-  const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'icon_16.png'));
+  // Use ICO on Windows (contains multiple sizes for DPI scaling), PNG fallback for others
+  const iconPath = process.platform === 'win32'
+    ? path.join(__dirname, '..', 'assets', 'icon.ico')
+    : path.join(__dirname, '..', 'assets', 'icon_32.png');
+  const icon = nativeImage.createFromPath(iconPath);
 
   tray = new Tray(icon);
   updateTrayTooltip();

@@ -5,6 +5,7 @@ directories:
 files:
   - dist/**/*
   - renderer/**/*
+  - assets/**/*
   - package.json
 extraResources:
   - from: scripts
@@ -12,7 +13,7 @@ extraResources:
 asar: true
 win:
   target: nsis
-  icon: null
+  icon: assets/icon.ico
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
