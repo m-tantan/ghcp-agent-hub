@@ -23,6 +23,7 @@ interface ParseCache {
   size: number;
 }
 const _parseCache = new Map<string, ParseCache>();
+const MAX_PARSE_CACHE_SIZE = 50;
 
 /**
  * Raw event from Copilot events.jsonl
@@ -465,6 +466,11 @@ export function parseSessionFile(filePath: string, approvalTimeoutSeconds = 5): 
   }
 
   updateCurrentStatus(result, approvalTimeoutSeconds);
+  // Evict oldest entries if cache is full
+  if (_parseCache.size >= MAX_PARSE_CACHE_SIZE) {
+    const firstKey = _parseCache.keys().next().value;
+    if (firstKey) _parseCache.delete(firstKey);
+  }
   _parseCache.set(filePath, { result, mtime, size });
   return result;
 }

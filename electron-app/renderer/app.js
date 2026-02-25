@@ -496,6 +496,13 @@ function updateSessionState(u) {
   // Store state for filtering
   if (u.state?.status) {
     sessionStates.set(u.sessionId, u.state);
+    // Prune stale entries when map grows large
+    if (sessionStates.size > 200) {
+      const activeIds = new Set(sessions.map(s => s.id));
+      for (const key of sessionStates.keys()) {
+        if (!activeIds.has(key)) sessionStates.delete(key);
+      }
+    }
   }
   const card = document.querySelector(`[data-session-id="${u.sessionId}"]`);
   if (!card || !u.state?.status) return;

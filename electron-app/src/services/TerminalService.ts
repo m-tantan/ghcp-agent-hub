@@ -18,6 +18,7 @@ export interface TerminalSession {
   sessionId?: string; // Copilot session ID if resuming
   cwd: string;
   mission?: string; // Mission text if started with one
+  disposables: Array<{ dispose: () => void }>;
 }
 
 export class TerminalService extends EventEmitter {
@@ -138,20 +139,21 @@ export class TerminalService extends EventEmitter {
       sessionId: copilotSessionId,
       cwd,
       mission,
+      disposables: [],
     };
 
     this.terminals.set(terminalId, session);
 
     // Forward data from pty to renderer
-    ptyProcess.onData((data: string) => {
+    session.disposables.push(ptyProcess.onData((data: string) => {
       this.emit('data', { terminalId, data });
-    });
+    }));
 
-    ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
+    session.disposables.push(ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
       console.log(`[TerminalService] Terminal ${terminalId} exited with code ${exitCode} (cwd: ${cwd}, session: ${copilotSessionId || 'none'})`);
       this.emit('exit', { terminalId, exitCode });
       this.terminals.delete(terminalId);
-    });
+    }));
 
     // Start copilot unless explicitly skipped (blank terminal)
     if (skipCopilot) return terminalId;
@@ -220,6 +222,9 @@ export class TerminalService extends EventEmitter {
   destroyTerminal(terminalId: string): void {
     const session = this.terminals.get(terminalId);
     if (session) {
+      for (const d of session.disposables) {
+        try { d.dispose(); } catch {}
+      }
       session.ptyProcess.kill();
       this.terminals.delete(terminalId);
     }
