@@ -835,6 +835,12 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
   });
   const fitAddon = new FitAddon.FitAddon();
   term.loadAddon(fitAddon);
+  // Clickable links — opens URLs in default browser
+  if (typeof WebLinksAddon !== 'undefined') {
+    term.loadAddon(new WebLinksAddon.WebLinksAddon((_event, uri) => {
+      api.openExternal(uri);
+    }));
+  }
   
   // Build label with session name + folder + full session ID
   const folderName = cwd.split(/[/\\]/).pop();
@@ -939,10 +945,14 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
   term.onData(data => api.terminalWrite(termId, data));
   term.onResize(({ cols, rows }) => api.terminalResize(termId, cols, rows));
   
-  // Copy via Ctrl+C — copy selection if present, otherwise send interrupt
-  // Paste via Ctrl+V — check for image first, then text
+  // Ctrl+C: In Copilot terminals, copy if selection, else send interrupt
+  //         In blank (plain shell) terminals, always send interrupt (\x03)
+  // Right-click: copy selected text (works in all terminals)
   term.attachCustomKeyEventHandler(e => {
     if (e.type === 'keydown' && e.ctrlKey && e.key === 'c') {
+      if (blank) {
+        return true; // Always send interrupt in plain shell terminals
+      }
       if (term.hasSelection()) {
         navigator.clipboard.writeText(term.getSelection());
         term.clearSelection();
@@ -996,8 +1006,17 @@ async function openEmbeddedTerminal(cwd, sessionId = null, mission = null, initi
   
   // Track focused terminal
   term.textarea.addEventListener('focus', () => { activeTerminalId = termId; });
+
+  // Right-click to copy selected text (works in all terminals including blank/plain shell)
+  termArea.addEventListener('contextmenu', e => {
+    if (term.hasSelection()) {
+      e.preventDefault();
+      navigator.clipboard.writeText(term.getSelection());
+      term.clearSelection();
+    }
+  });
   
-  terminals.set(termId, { term, fitAddon, cwd, sessionId, color });
+  terminals.set(termId, { term, fitAddon, cwd, sessionId, color, blank: !!blank });
   if (color) terminalColors[termId] = color;
 
   // On first terminal, auto-switch to terminal-only mode so the sessions
@@ -2042,43 +2061,32 @@ function clearDrComments() {
 
 // --- Send to Copilot ---
 
-async function sendDrComments() {
+function sendDrComments() {
   if (diffReviewComments.length === 0 || !diffReviewTermId) return;
 
-  // Build formatted message
-  const grouped = {};
+  // Build readable multi-line review text
+  const lines = ['Fix these review comments:', ''];
   for (const c of diffReviewComments) {
-    if (!grouped[c.filePath]) grouped[c.filePath] = [];
-    grouped[c.filePath].push(c);
+    const fullPath = diffReviewCwd ? (diffReviewCwd.replace(/\\/g, '/') + '/' + c.filePath) : c.filePath;
+    const typeLabel = c.lineType === 'add' ? 'new' : c.lineType === 'remove' ? 'removed' : 'unchanged';
+    lines.push(`- ${fullPath}:${c.lineNumber} (${typeLabel})`);
+    lines.push(`  Code: ${c.lineContent.trim()}`);
+    lines.push(`  Comment: ${c.comment}`);
+    lines.push('');
   }
+  const msg = lines.join('\n');
 
-  let msg = 'I have the following review comments on the code changes:\n\n';
-  for (const [fp, comments] of Object.entries(grouped)) {
-    const fullPath = diffReviewCwd ? (diffReviewCwd.replace(/\\/g, '/') + '/' + fp) : fp;
-    msg += `## ${fullPath}\n\n`;
-    for (const c of comments) {
-      const typeLabel = c.lineType === 'add' ? 'new' : c.lineType === 'remove' ? 'removed' : 'unchanged';
-      msg += `**Line ${c.lineNumber}** (${typeLabel}):\n`;
-      msg += '```\n' + c.lineContent + '\n```\n';
-      msg += `Comment: ${c.comment}\n\n`;
-    }
-  }
-  msg += 'Please address these review comments.\n';
-
-  // Write to temp file, then reference it with @filepath (single-line input).
   const termId = diffReviewTermId;
-  const reviewPath = await api.writeTempReview(msg);
 
   // Close diff review first (restores terminal to normal view)
   closeDiffReview();
 
-  // Paste the @file reference into the terminal. User presses Enter to send.
+  // Paste as bracketed paste so multi-line text is treated as one input
   setTimeout(() => {
-    const text = `@${reviewPath} please address these review comments`;
-    api.terminalWrite(termId, text);
-    // Focus the terminal so user can immediately press Enter
-    const t = terminals.get(termId);
-    if (t) setTimeout(() => t.term.focus(), 200);
+    api.terminalWrite(termId, '\x1b[200~' + msg + '\x1b[201~');
+    setTimeout(() => {
+      api.terminalWrite(termId, '\r');
+    }, 500);
   }, 500);
 }
 

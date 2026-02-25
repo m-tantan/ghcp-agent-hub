@@ -348,6 +348,10 @@ function setupIPC(): void {
     shell.openPath(folderPath);
   });
 
+  ipcMain.handle('open-external', (_event, url: string) => {
+    shell.openExternal(url);
+  });
+
   // Save clipboard image to temp file and return the path
   ipcMain.handle('save-clipboard-image', async () => {
     const image = clipboard.readImage();
@@ -362,14 +366,6 @@ function setupIPC(): void {
   });
 
   // Write review comments to a temp file and return the path
-  ipcMain.handle('write-temp-review', async (_event, content: string) => {
-    const tmpDir = app.getPath('temp');
-    const fileName = `copilot-review-${Date.now()}.md`;
-    const filePath = path.join(tmpDir, fileName);
-    const fs = await import('fs');
-    fs.writeFileSync(filePath, content, 'utf-8');
-    return filePath;
-  });
 
   // === EMBEDDED TERMINAL ===
   

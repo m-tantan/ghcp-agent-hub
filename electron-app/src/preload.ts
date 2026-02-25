@@ -48,7 +48,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   terminalList: () => ipcRenderer.invoke('terminal-list'),
   terminalAvailable: () => ipcRenderer.invoke('terminal-available'),
   saveClipboardImage: () => ipcRenderer.invoke('save-clipboard-image'),
-  writeTempReview: (content: string) => ipcRenderer.invoke('write-temp-review', content),
 
   // Terminal colors & persistence
   getTerminalColor: (sessionId: string) => ipcRenderer.invoke('get-terminal-color', sessionId),
@@ -80,6 +79,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Utilities
   openFolder: (folderPath: string) => ipcRenderer.invoke('open-folder', folderPath),
+  openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
 
   // Git Diff & Code Changes
   getCodeChanges: (cwd: string) => ipcRenderer.invoke('get-code-changes', cwd),
