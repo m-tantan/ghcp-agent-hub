@@ -115,6 +115,50 @@ body {
 }
 .sidebar-collapse-btn:hover { color: var(--accent); background: var(--accent-glow); }
 
+/* --- Settings Button & Panel --- */
+.settings-btn {
+  background: none; border: none;
+  color: var(--text-muted);
+  cursor: pointer; font-size: 16px; padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s var(--ease);
+  flex-shrink: 0;
+}
+.settings-btn:hover { color: var(--accent); background: var(--accent-glow); }
+
+.settings-panel {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 12px 14px;
+  background: var(--bg-surface);
+}
+.settings-panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px; font-size: 12px; font-weight: 600; color: var(--text-primary);
+}
+.settings-close {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: 14px; padding: 2px 6px; border-radius: var(--radius-sm);
+}
+.settings-close:hover { color: var(--accent); }
+.settings-field { margin-bottom: 10px; }
+.settings-field label {
+  display: block; font-size: 11px; font-weight: 600;
+  color: var(--text-secondary); margin-bottom: 4px;
+}
+.settings-field input {
+  width: 100%; box-sizing: border-box;
+  padding: 7px 10px; font-size: 12px;
+  background: var(--bg-base); border: 1px solid var(--border-default);
+  color: var(--text-primary); border-radius: var(--radius-sm);
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+}
+.settings-field input:focus { outline: none; border-color: var(--accent); }
+.settings-hint {
+  font-size: 10px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;
+}
+.settings-actions { display: flex; gap: 8px; }
+.settings-actions button { padding: 6px 16px; font-size: 11px; }
+
 .sidebar-actions {
   padding: 14px;
   display: flex; gap: 8px;

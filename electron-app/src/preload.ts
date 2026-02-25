@@ -69,6 +69,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Terminal only mode
   getTerminalOnlyMode: () => ipcRenderer.invoke('get-terminal-only-mode'),
   setTerminalOnlyMode: (enabled: boolean) => ipcRenderer.invoke('set-terminal-only-mode', enabled),
+
+  // Start command
+  getStartCommand: () => ipcRenderer.invoke('get-start-command'),
+  setStartCommand: (command: string) => ipcRenderer.invoke('set-start-command', command),
   
   // Worktree management
   createWorktree: (repoPath: string, branchName: string, baseBranch: string) =>

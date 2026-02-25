@@ -368,6 +368,11 @@ function setupIPC(): void {
   
   // Create embedded terminal
   ipcMain.handle('terminal-create', async (_event, terminalId: string, cwd: string, sessionId?: string, mission?: string) => {
+    const customCmd = configService.getStartCommand();
+    if (customCmd) {
+      // Use custom start command directly (skip auto-detection)
+      return terminalService.createTerminal(terminalId, cwd, undefined, sessionId, mission, undefined, false, customCmd);
+    }
     const cli = await findCopilotExecutable();
     const copilotPath = cli ? cli.path : undefined;
     const copilotCommand = cli ? cli.command : undefined;
@@ -453,6 +458,14 @@ function setupIPC(): void {
   });
   ipcMain.handle('set-terminal-only-mode', (_event, enabled: boolean) => {
     configService.setTerminalOnlyMode(enabled);
+  });
+
+  // Start command
+  ipcMain.handle('get-start-command', () => {
+    return configService.getStartCommand();
+  });
+  ipcMain.handle('set-start-command', (_event, command: string) => {
+    configService.setStartCommand(command);
   });
 
   // === GIT DIFF & CODE CHANGES ===

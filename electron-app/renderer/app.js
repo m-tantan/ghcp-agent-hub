@@ -524,6 +524,24 @@ async function addRepository() { await api.addRepository(); await loadData(); }
 async function removeRepo(p) { if (confirm(`Remove?\n${p}`)) { await api.removeRepository(p); await loadData(); } }
 function toggleRepo(p) { const r = repositories.find(x => x.path === p); if (r) { r.isExpanded = !r.isExpanded; renderSidebar(); } }
 function collapseAllRepos() { repositories.forEach(r => r.isExpanded = false); renderSidebar(); }
+
+// === Settings Panel ===
+async function toggleSettingsPanel() {
+  const panel = document.getElementById('settingsPanel');
+  if (panel.style.display === 'none') {
+    const cmd = await api.getStartCommand();
+    document.getElementById('startCommandInput').value = cmd || '';
+    panel.style.display = '';
+  } else {
+    panel.style.display = 'none';
+  }
+}
+async function saveSettings() {
+  const cmd = document.getElementById('startCommandInput').value;
+  await api.setStartCommand(cmd);
+  document.getElementById('settingsPanel').style.display = 'none';
+}
+
 async function openTerm(dir, branch, mission) { 
   if (embeddedTerminalAvailable) {
     // Use embedded terminal

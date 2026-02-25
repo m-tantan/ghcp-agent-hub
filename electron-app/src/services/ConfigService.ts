@@ -30,6 +30,7 @@ export interface AppConfig {
   savedTerminals?: SavedTerminal[]; // terminals to restore on app reopen
   sessionViewMode?: 'tile' | 'list'; // session display preference
   terminalOnlyMode?: boolean; // hide sessions, terminals fill entire space
+  startCommand?: string; // custom Copilot CLI start command (empty = auto-detect)
 }
 
 export interface SavedTerminal {
@@ -252,6 +253,19 @@ export class ConfigService {
   setTerminalOnlyMode(enabled: boolean): void {
     const config = this.loadConfig();
     config.terminalOnlyMode = enabled;
+    this.saveConfig(config);
+  }
+
+  // --- Start Command ---
+
+  getStartCommand(): string {
+    const config = this.loadConfig();
+    return config.startCommand ?? '';
+  }
+
+  setStartCommand(command: string): void {
+    const config = this.loadConfig();
+    config.startCommand = command.trim();
     this.saveConfig(config);
   }
 }

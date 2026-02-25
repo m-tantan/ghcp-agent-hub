@@ -65,7 +65,8 @@ export class TerminalService extends EventEmitter {
     copilotSessionId?: string,
     mission?: string,
     copilotCommand?: string,
-    skipCopilot?: boolean
+    skipCopilot?: boolean,
+    customStartCommand?: string
   ): Promise<string | null> {
     if (!pty) {
       console.error('Cannot create terminal: node-pty not available');
@@ -154,12 +155,14 @@ export class TerminalService extends EventEmitter {
     }
 
     setTimeout(() => {
-      const isGh = copilotCommand === 'gh copilot';
       let baseCmd: string;
-      if (copilotPath) {
+      if (customStartCommand) {
+        baseCmd = customStartCommand;
+      } else if (copilotPath) {
+        const isGh = copilotCommand === 'gh copilot';
         baseCmd = isGh ? `& "${copilotPath}" copilot` : `& "${copilotPath}"`;
       } else {
-        // Fallback: rely on copilot being in the shell's PATH
+        const isGh = copilotCommand === 'gh copilot';
         baseCmd = isGh ? 'gh copilot' : 'copilot';
       }
 

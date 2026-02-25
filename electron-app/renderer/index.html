@@ -11,11 +11,23 @@
 <body>
   <div class="app">
     <div class="sidebar" id="sidebar">
-      <div class="sidebar-header"><h1>🤖 GHCP Agent Hub</h1><button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Collapse sidebar">◀</button></div>
+      <div class="sidebar-header"><button class="settings-btn" id="settingsBtn" onclick="toggleSettingsPanel()" title="Settings">⚙</button><h1>🤖 GHCP Agent Hub</h1><button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Collapse sidebar">◀</button></div>
       <div class="sidebar-actions">
         <button id="addRepoBtn">+ Add Repo</button>
         <button id="quickStartBtn" class="primary" title="Start a new session with a mission">🚀 Quick Start</button>
         <button id="refreshBtn">🔄</button>
+      </div>
+      <!-- Settings Panel (inline, toggleable) -->
+      <div class="settings-panel" id="settingsPanel" style="display:none;">
+        <div class="settings-panel-header"><span>⚙ Settings</span><button onclick="toggleSettingsPanel()" class="settings-close">✕</button></div>
+        <div class="settings-field">
+          <label for="startCommandInput">Start Command</label>
+          <input type="text" id="startCommandInput" placeholder="e.g. copilot  (empty = auto-detect)" spellcheck="false">
+          <div class="settings-hint">Command used to launch Copilot in new terminals. Leave empty for auto-detection.</div>
+        </div>
+        <div class="settings-actions">
+          <button id="saveSettingsBtn" class="primary" onclick="saveSettings()">Save</button>
+        </div>
       </div>
       <div style="padding:4px 12px;"><button onclick="collapseAllRepos()" style="width:100%;padding:4px;font-size:11px;background:#1a1a2e;border:1px solid #0f3460;color:#8b949e;cursor:pointer;border-radius:4px;">▲ Collapse All</button></div>
       <div class="repo-list" id="repoList"></div>
